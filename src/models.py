@@ -10,28 +10,31 @@ class Autoencoder(nn.Module):
         super().__init__()
 
         self.encoder = nn.Sequential(
-            nn.Conv2d(1, 128, 3, stride=3, padding=0),
+            nn.Conv2d(1, 128, (3,3), stride=(1,1), padding=(1,1)),
             nn.ReLU(True),
             nn.MaxPool2d(2),
 
-            nn.Conv2d(128, 32, 3, stride=3, padding=0),
+            nn.Conv2d(128, 32, (3,3), stride=(1,1), padding=(1,1)),
             nn.ReLU(True),
             nn.MaxPool2d(2),
 
-            nn.Conv2d(32, 8, 3, stride=3, padding=0),
+            nn.Conv2d(32, 8, (3,3), stride=(1,1), padding=(1,1)),
             nn.ReLU(True),
             nn.MaxPool2d(2)
         )
 
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(8, 32, 3, stride=3, padding=0),
+            nn.ConvTranspose2d(8, 32, (3,3), stride=(1,1), padding=(1,1)),
             nn.ReLU(True),
+            nn.Upsample(scale_factor=2),
 
-            nn.ConvTranspose2d(32, 128, 3, stride=3, padding=0),
+            nn.ConvTranspose2d(32, 128, (3,3), stride=(1,1), padding=(1,1)),
             nn.ReLU(True),
+            nn.Upsample(scale_factor=2),
 
-            nn.Conv2d(128, 1, 3, stride=3, padding=0),
+            nn.ConvTranspose2d(128, 1, (3,3), stride=(1,1), padding=(1,1)),
             nn.ReLU(True),
+            nn.Upsample(scale_factor=2)
         )
 
     def forward(self, features):
