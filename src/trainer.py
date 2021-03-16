@@ -1,4 +1,4 @@
-import os, pandas, time, torch
+import os, pandas, time, torch, numpy
 from matplotlib import pyplot
 from torch import nn, optim, device
 from torch.utils.data import Dataset, DataLoader
@@ -31,29 +31,13 @@ class CustomImageDataset(Dataset):
         return sample
 
 
-if __name__ == "__main__":
+def train_model(data_loader, model, optimizer, criterion, device, epochs=5):
 
-    path_to_data = '/Users/{}/ETH/projects/morpho-learner/data/cut/'.format(user)
-    training_data = CustomImageDataset(path_to_data)
-    training_data, test_data = torch.utils.data.random_split(training_data, [10000, 70000])
-    train_dataloader = DataLoader(training_data, batch_size=256, shuffle=True)
-
-    model = Autoencoder()
-    print(model)
-
-    # create an optimizer object
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    criterion = nn.MSELoss()
-
-    device = device("cpu")
-
-    epochs = 10
     for epoch in range(epochs):
 
         start = time.time()
         loss = 0
-        for batch_features in train_dataloader:
-            # reshape mini-batch data to [n_batches, n_features] matrix
+        for batch_features in data_loader:
             # load it to the active device
             batch_features = batch_features[0].float().to(device)
             # reset the gradients back to zero
@@ -70,8 +54,50 @@ if __name__ == "__main__":
             loss += train_loss.item()
 
         # compute the epoch training loss
-        loss = loss / len(train_dataloader)
+        loss = loss / len(data_loader)
 
         # display the epoch training loss
-        print("epoch {}/{}: {}s, loss = {:.4f}".format(epoch + 1, epochs, time.time() - start, loss))
+        print("epoch {}/{}: {} sec, loss = {:.4f}".format(epoch + 1, epochs, int(time.time() - start), loss))
 
+    return model
+
+
+def plot_reconstruction(data_loader, trained_model, n_images=10):
+
+    for i in range(n_images):
+        train_features, _ = next(iter(data_loader))
+        img = train_features[0].squeeze()
+        img_tensor = torch.Tensor(numpy.expand_dims(train_features[0], axis=0))
+        rec = trained_model(img_tensor)
+
+        pyplot.figure()
+        pyplot.subplot(121)
+        pyplot.imshow(img, cmap="gray")
+        pyplot.title("original")
+        pyplot.subplot(122)
+        pyplot.imshow(rec.detach().numpy()[0][0], cmap="gray")
+        pyplot.title("reconstruction")
+        pyplot.show()
+
+
+if __name__ == "__main__":
+
+    path_to_data = '/Users/{}/ETH/projects/morpho-learner/data/cut/'.format(user)
+    training_data = CustomImageDataset(path_to_data, transform=lambda x: x / 255.)
+    training_data, test_data = torch.utils.data.random_split(training_data, [10000, 70000])
+    # training_data, test_data = torch.utils.data.random_split(training_data, [1000, 79000])
+
+    train_dataloader = DataLoader(training_data, batch_size=64, shuffle=True)
+    model = Autoencoder()
+    optimizer = optim.Adam(model.parameters(), lr=0.0003)
+    criterion = nn.BCELoss()
+    device = device("cpu")
+
+    trained_model = train_model(train_dataloader, model, optimizer, criterion, device, epochs=5)
+    plot_reconstruction(train_dataloader, trained_model, n_images=10)
+
+
+    # TODO:
+    #  - add lr scheduler
+    #  - try torch.multiprocessing
+    #  - train and save model to use encoder later
