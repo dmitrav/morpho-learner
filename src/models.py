@@ -20,16 +20,16 @@ class Autoencoder(nn.Module):
 
             nn.Conv2d(32, 16, (3,3), stride=(1,1), padding=(1,1)),
             nn.ReLU(True),
-            nn.MaxPool2d(2),
+            # nn.MaxPool2d(2),
 
-            nn.Conv2d(16, 8, (3, 3), stride=(1, 1), padding=(1, 1)),
-            nn.ReLU(True)
+            # nn.Conv2d(16, 8, (3, 3), stride=(1, 1), padding=(1, 1)),
+            # nn.ReLU(True)
         )
 
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(8, 16, (3,3), stride=(1,1), padding=(1,1)),
-            nn.ReLU(True),
-            nn.Upsample(scale_factor=2),
+            # nn.ConvTranspose2d(8, 16, (3,3), stride=(1,1), padding=(1,1)),
+            # nn.ReLU(True),
+            # nn.Upsample(scale_factor=2),
 
             nn.ConvTranspose2d(16, 32, (3,3), stride=(1,1), padding=(1,1)),
             nn.ReLU(True),
