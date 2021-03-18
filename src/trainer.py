@@ -83,13 +83,13 @@ def run_classifier_training(data_loader_drugs, data_loader_controls, model, opti
                 # process drugs data
                 outputs = model(batch_features)
                 train_loss += criterion(outputs, batch_labels)
-                true_positives = (outputs.argmax(-1) == 0).float().detach().numpy()
+                true_negatives = (outputs.argmax(-1) == 0).float().detach().numpy()
 
                 # process controls data
                 batch_features, batch_labels = next(iter(data_loader_controls))
                 outputs = model(batch_features.float().to(device))
                 train_loss += criterion(outputs, batch_labels)
-                true_negatives = (outputs.argmax(-1) == 1).float().detach().numpy()
+                true_positives = (outputs.argmax(-1) == 1).float().detach().numpy()
 
                 # compute accumulated gradients
                 train_loss.backward()
@@ -110,6 +110,49 @@ def run_classifier_training(data_loader_drugs, data_loader_controls, model, opti
 
         # display the epoch training loss
         print("epoch {}/{}: {} sec, loss = {:.4f}, acc = {:.4f}".format(epoch + 1, epochs, int(time.time() - start), loss, acc))
+
+
+def run_simultaneous_training(data_loader_drugs, data_loader_controls,
+                              ae_model, ae_optimizer, ae_criterion,
+                              cl_model, cl_optimizer, cl_criterion,
+                              device, epochs=10):
+
+    for epoch in range(epochs):
+
+        start = time.time()
+        loss = 0
+        for batch_features, batch_labels in data_loader_drugs:
+
+            # TRAIN CLASSIFIER
+            cl_optimizer.zero_grad()
+            outputs = cl_model(batch_features)
+            cl_loss = cl_criterion(outputs, batch_labels)
+            cl_loss.backward()
+            cl_optimizer.step()
+
+
+
+            # load it to the active device
+            batch_features = batch_features.float().to(device)
+            # reset the gradients back to zero
+            ae_optimizer.zero_grad()
+            # compute reconstructions
+            outputs = ae_model(batch_features)
+            # compute training reconstruction loss
+            train_loss = ae_criterion(outputs, batch_features)
+            # compute accumulated gradients
+            train_loss.backward()
+            # perform parameter update based on current gradients
+            ae_optimizer.step()
+            # add the mini-batch training loss to epoch loss
+            loss += train_loss.item()
+
+        # compute the epoch training loss
+        loss = loss / len(data_loader_drugs)
+
+        # display the epoch training loss
+        print("epoch {}/{}: {} sec, loss = {:.4f}".format(epoch + 1, epochs, int(time.time() - start), loss))
+
 
 
 def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10):
@@ -192,6 +235,39 @@ def train_classifier():
     torch.save(model.state_dict(), save_path + 'classifier.torch')
 
 
+def train_together():
+
+    path_to_drugs = '/Users/{}/ETH/projects/morpho-learner/data/cut/'.format(user)
+    path_to_controls = '/Users/{}/ETH/projects/morpho-learner/data/cut_controls/'.format(user)
+    save_path = '/Users/{}/ETH/projects/morpho-learner/res/'.format(user)
+
+    device = torch.device("cpu")
+
+    ae = Autoencoder().to(device)
+    ae_optimizer = optim.Adam(ae.parameters(), lr=0.0003)
+    ae_criterion = nn.BCELoss()
+
+    cl = Classifier().to(device)
+    cl_optimizer = optim.Adam(cl.parameters(), lr=0.0001)
+    cl_criterion = nn.CrossEntropyLoss()
+
+    training_data_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)
+    training_data_drugs, test_data_drugs = torch.utils.data.random_split(training_data_drugs, [10000, 70000])
+
+    training_data_controls = CustomImageDataset(path_to_controls, 1, transform=lambda x: x / 255.)
+
+    data_loader_train_drugs = DataLoader(training_data_drugs, batch_size=64, shuffle=True)
+    data_loader_train_controls = DataLoader(training_data_controls, batch_size=64, shuffle=True)
+
+
+
+
+
+
+
+    # torch.save(model.state_dict(), save_path + 'classifier.torch')
+
+
 if __name__ == "__main__":
     # train_autoencoder()
-    train_classifier()
+    # train_classifier()
