@@ -49,4 +49,5 @@ class DataManager:
 if __name__ == "__main__":
 
     dm = DataManager()
-    dm.cut_images_and_save(dm.data_path, '/Users/dmitrav/ETH/projects/morpho-learner/data/cut/', 16)
+    dm.cut_images_and_save('/Users/dmitrav/ETH/projects/morpho-learner/data/HT29_CL1_P1_controls/',
+                           '/Users/dmitrav/ETH/projects/morpho-learner/data/cut_controls/', 16)
