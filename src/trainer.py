@@ -311,5 +311,5 @@ def train_together():
 if __name__ == "__main__":
     # train_autoencoder()
     # train_classifier()
-    # train_together()
+    train_together()
     pass
