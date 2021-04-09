@@ -1,5 +1,5 @@
 
-version = "v.0.0.1"
+version = "v.0.0.2"
 user = 'andreidm'
 
 drugs = ['Chlormethine', 'Clofarabine', 'Panzem-2-ME2', 'Pemetrexed', 'Asparaginase',

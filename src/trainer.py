@@ -292,20 +292,23 @@ def train_together():
     cl_criterion = nn.CrossEntropyLoss()
 
     training_data_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)
-    training_data_drugs, test_data_drugs = torch.utils.data.random_split(training_data_drugs, [5000, 75000])
+    # training_data_drugs, test_data_drugs = torch.utils.data.random_split(training_data_drugs, [5000, 75000])
 
     training_data_controls = CustomImageDataset(path_to_controls, 1, transform=lambda x: x / 255.)
 
-    data_loader_train_drugs = DataLoader(training_data_drugs, batch_size=64, shuffle=True)
-    data_loader_train_controls = DataLoader(training_data_controls, batch_size=64, shuffle=True)
+    print('total drugs:', training_data_drugs.__len__())
+    print('total controls:', training_data_controls.__len__())
 
-    run_simultaneous_training(data_loader_train_drugs, data_loader_train_controls,
-                              ae, ae_optimizer, ae_criterion,
-                              cl, cl_optimizer, cl_criterion,
-                              device, 50)
-
-    plot_reconstruction(data_loader_train_drugs, ae, save_to=save_path, n_images=30)
-    torch.save(ae.state_dict(), save_path + 'aecl.torch')
+    # data_loader_train_drugs = DataLoader(training_data_drugs, batch_size=64, shuffle=True)
+    # data_loader_train_controls = DataLoader(training_data_controls, batch_size=64, shuffle=True)
+    #
+    # run_simultaneous_training(data_loader_train_drugs, data_loader_train_controls,
+    #                           ae, ae_optimizer, ae_criterion,
+    #                           cl, cl_optimizer, cl_criterion,
+    #                           device, 50)
+    #
+    # plot_reconstruction(data_loader_train_drugs, ae, save_to=save_path, n_images=30)
+    # torch.save(ae.state_dict(), save_path + 'aecl.torch')
 
 
 if __name__ == "__main__":

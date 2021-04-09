@@ -130,7 +130,7 @@ class DataManager:
                             # controls
                             well_files = [file for file in os.listdir(path_to_images)
                                           if file.endswith('.jpg') and file.split('_')[3] == well]
-                            well_files = sorted(well_files)  # get all control images
+                            well_files = sorted(well_files)[::3]  # get every third control image
                             out_path = save_to_folder + 'cut_controls/'
 
                         elif drug in all_drug_names:
