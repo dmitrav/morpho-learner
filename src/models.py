@@ -65,7 +65,7 @@ class Classifier(nn.Module):
         )
 
         print(self)
-        print('number of parameters: {}'.format(self.count_parameters()))
+        print('number of parameters: {}\n'.format(self.count_parameters()))
 
     def forward(self, features):
         return self.model(features)

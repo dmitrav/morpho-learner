@@ -7,8 +7,8 @@ import torch.multiprocessing as mp
 
 from src.constants import user
 from src.models import Autoencoder, Classifier
-from src.trainer import plot_reconstruction, train_together
+from src.trainer import plot_reconstruction, train_together, train_autoencoder
 
 if __name__ == "__main__":
-    train_together()
+    train_autoencoder()
 

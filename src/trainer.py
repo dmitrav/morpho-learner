@@ -62,7 +62,7 @@ def run_autoencoder_training(data_loader, model, optimizer, criterion, device, l
             lr_scheduler.step()
 
         # display the epoch training loss
-        print("epoch {}/{}: {} sec, loss = {:.4f}".format(epoch + 1, epochs, int(time.time() - start), loss))
+        print("epoch {}/{}: {} min, loss = {:.4f}".format(epoch + 1, epochs, int((time.time() - start) / 60), loss))
 
 
 def run_classifier_training(data_loader_drugs, data_loader_controls, model, optimizer, criterion, device, lr_scheduler=None, epochs=10):
@@ -192,8 +192,8 @@ def run_simultaneous_training(data_loader_drugs, data_loader_controls,
         acc_epoch = acc_epoch / len(data_loader_drugs)
 
         # display the epoch training loss
-        print("epoch {}/{}: {} sec, ae_loss = {:.4f}, cl_loss = {:.4f}, rec_loss = {:.4f}, acc = {:.4f}"
-              .format(epoch + 1, epochs, int(time.time() - start), ae_loss_epoch, cl_loss_epoch, rec_loss_epoch, acc_epoch))
+        print("epoch {}/{}: {} min, ae_loss = {:.4f}, cl_loss = {:.4f}, rec_loss = {:.4f}, acc = {:.4f}"
+              .format(epoch + 1, epochs, int((time.time() - start) / 60), ae_loss_epoch, cl_loss_epoch, rec_loss_epoch, acc_epoch))
 
 
 def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10):
@@ -223,11 +223,12 @@ def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10)
 def train_autoencoder():
 
     path_to_data = '/Users/{}/ETH/projects/morpho-learner/data/cut/'.format(user)
-    save_path = '/Users/{}/ETH/projects/morpho-learner/res/'.format(user)
+    save_path = '/Users/{}/ETH/projects/morpho-learner/res/ae/'.format(user)
+
+    N = 200000  # like 5 images of each drug
 
     training_data = CustomImageDataset(path_to_data, 0, transform=lambda x: x / 255.)
-    training_data, test_data = torch.utils.data.random_split(training_data, [10000, 70000])
-    # training_data, test_data = torch.utils.data.random_split(training_data, [5000, 75000])
+    training_data, test_data = torch.utils.data.random_split(training_data, [N, training_data.__len__() - N])
 
     device = torch.device("cpu")
     data_loader_train = DataLoader(training_data, batch_size=64, shuffle=True)
@@ -237,7 +238,7 @@ def train_autoencoder():
     criterion = nn.BCELoss()
 
     # best loss = 0.6331
-    run_autoencoder_training(data_loader_train, model, optimizer, criterion, device, lr_scheduler=None, epochs=100)
+    run_autoencoder_training(data_loader_train, model, optimizer, criterion, device, lr_scheduler=None, epochs=30)
     plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=20)
 
     torch.save(model.state_dict(), save_path + 'autoencoder.torch')
@@ -291,24 +292,28 @@ def train_together():
     cl_optimizer = optim.Adam(cl.parameters(), lr=0.0003)
     cl_criterion = nn.CrossEntropyLoss()
 
+    N = 200000  # like 5 images of each drug
+
     training_data_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)
-    # training_data_drugs, test_data_drugs = torch.utils.data.random_split(training_data_drugs, [5000, 75000])
+    training_data_drugs, _ = torch.utils.data.random_split(training_data_drugs, [N, training_data_drugs.__len__() - N])
 
     training_data_controls = CustomImageDataset(path_to_controls, 1, transform=lambda x: x / 255.)
+    training_data_controls, _ = torch.utils.data.random_split(training_data_controls, [N, training_data_controls.__len__() - N])
 
     print('total drugs:', training_data_drugs.__len__())
-    print('total controls:', training_data_controls.__len__())
+    print('total controls:', training_data_controls.__len__(), '\n')
 
-    # data_loader_train_drugs = DataLoader(training_data_drugs, batch_size=64, shuffle=True)
-    # data_loader_train_controls = DataLoader(training_data_controls, batch_size=64, shuffle=True)
-    #
-    # run_simultaneous_training(data_loader_train_drugs, data_loader_train_controls,
-    #                           ae, ae_optimizer, ae_criterion,
-    #                           cl, cl_optimizer, cl_criterion,
-    #                           device, 50)
-    #
-    # plot_reconstruction(data_loader_train_drugs, ae, save_to=save_path, n_images=30)
-    # torch.save(ae.state_dict(), save_path + 'aecl.torch')
+    data_loader_train_drugs = DataLoader(training_data_drugs, batch_size=64, shuffle=True)
+    data_loader_train_controls = DataLoader(training_data_controls, batch_size=64, shuffle=True)
+
+    run_simultaneous_training(data_loader_train_drugs, data_loader_train_controls,
+                              ae, ae_optimizer, ae_criterion,
+                              cl, cl_optimizer, cl_criterion,
+                              device, 30)
+
+    plot_reconstruction(data_loader_train_drugs, ae, save_to=save_path, n_images=30)
+    torch.save(ae.state_dict(), save_path + 'aecl1.torch')
+    torch.save(cl.state_dict(), save_path + 'aecl2.torch')
 
 
 if __name__ == "__main__":
