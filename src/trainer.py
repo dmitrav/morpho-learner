@@ -200,20 +200,21 @@ def run_simultaneous_training(data_loader_drugs, data_loader_controls,
 
     return rec_loss_epoch, acc_epoch
 
+
 def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10):
 
     for i in range(n_images):
         train_features, _ = next(iter(data_loader))
         img = train_features[0].squeeze()
         img_tensor = torch.Tensor(numpy.expand_dims(train_features[0], axis=0))
-        rec = trained_model(img_tensor)
+        rec = trained_model(img_tensor.cuda())
 
         pyplot.figure()
         pyplot.subplot(121)
         pyplot.imshow(img, cmap="gray")
         pyplot.title("original")
         pyplot.subplot(122)
-        pyplot.imshow(rec.detach().numpy()[0][0], cmap="gray")
+        pyplot.imshow(rec.cpu().detach().numpy()[0][0], cmap="gray")
         pyplot.title("reconstruction")
 
         if save_to is not None:
@@ -227,7 +228,7 @@ def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10)
 def train_autoencoder():
 
     path_to_data = 'D:\ETH\projects\morpho-learner\data\cut\\'
-    save_path = 'D:\ETH\projects\morpho-learner\data\\res\\ae\\'
+    save_path = 'D:\ETH\projects\morpho-learner\\res\\ae\\'
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -238,13 +239,13 @@ def train_autoencoder():
 
     data_loader_train = DataLoader(training_data, batch_size=64, shuffle=True)
     model = Autoencoder().to(device)
-    optimizer = optim.Adam(model.parameters(), lr=0.002)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10, 20], gamma=0.5)
+    optimizer = optim.Adam(model.parameters(), lr=0.0003)
+    # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10, 20], gamma=0.5)
     criterion = nn.BCELoss()
 
     # best loss = 0.6331
     last_rec_loss = run_autoencoder_training(data_loader_train, model, optimizer, criterion, device,
-                                             lr_scheduler=scheduler, epochs=30)
+                                             lr_scheduler=None, epochs=30)
 
     save_path = save_path.replace('ae', 'ae_{}'.format(round(last_rec_loss, 4)))
     plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=30)
@@ -289,7 +290,7 @@ def train_together():
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
-    save_path = 'D:\ETH\projects\morpho-learner\data\\res\\aecl\\'
+    save_path = 'D:\ETH\projects\morpho-learner\\res\\aecl\\'
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -298,7 +299,7 @@ def train_together():
     ae_criterion = nn.BCELoss()
 
     cl = Classifier().to(device)
-    cl_optimizer = optim.Adam(cl.parameters(), lr=0.0006)
+    cl_optimizer = optim.Adam(cl.parameters(), lr=0.0009)
     cl_criterion = nn.CrossEntropyLoss()
 
     N = 200000  # like 5 images of each drug
