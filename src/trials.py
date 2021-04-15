@@ -11,4 +11,3 @@ from src.trainer import plot_reconstruction, train_together, train_autoencoder
 
 if __name__ == "__main__":
     train_autoencoder()
-
