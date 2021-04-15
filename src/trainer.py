@@ -34,6 +34,7 @@ class CustomImageDataset(Dataset):
 
 def run_autoencoder_training(data_loader, model, optimizer, criterion, device, lr_scheduler=None, epochs=10):
 
+    loss = 0
     for epoch in range(epochs):
 
         start = time.time()
@@ -64,6 +65,7 @@ def run_autoencoder_training(data_loader, model, optimizer, criterion, device, l
         # display the epoch training loss
         print("epoch {}/{}: {} min, loss = {:.4f}".format(epoch + 1, epochs, int((time.time() - start) / 60), loss))
 
+    return loss
 
 def run_classifier_training(data_loader_drugs, data_loader_controls, model, optimizer, criterion, device, lr_scheduler=None, epochs=10):
 
@@ -116,7 +118,8 @@ def run_simultaneous_training(data_loader_drugs, data_loader_controls,
                               ae_model, ae_optimizer, ae_criterion,
                               cl_model, cl_optimizer, cl_criterion,
                               device, epochs=10):
-
+    rec_loss_epoch = 0
+    acc_epoch = 0
     for epoch in range(epochs):
 
         start = time.time()
@@ -195,6 +198,7 @@ def run_simultaneous_training(data_loader_drugs, data_loader_controls,
         print("epoch {}/{}: {} min, ae_loss = {:.4f}, cl_loss = {:.4f}, rec_loss = {:.4f}, acc = {:.4f}"
               .format(epoch + 1, epochs, int((time.time() - start) / 60), ae_loss_epoch, cl_loss_epoch, rec_loss_epoch, acc_epoch))
 
+    return rec_loss_epoch, acc_epoch
 
 def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10):
 
@@ -232,7 +236,6 @@ def train_autoencoder():
     training_data = CustomImageDataset(path_to_data, 0, transform=lambda x: x / 255.)
     training_data, test_data = torch.utils.data.random_split(training_data, [N, training_data.__len__() - N])
 
-    device = torch.device("cpu")
     data_loader_train = DataLoader(training_data, batch_size=64, shuffle=True)
     model = Autoencoder().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.002)
@@ -240,8 +243,11 @@ def train_autoencoder():
     criterion = nn.BCELoss()
 
     # best loss = 0.6331
-    run_autoencoder_training(data_loader_train, model, optimizer, criterion, device, lr_scheduler=scheduler, epochs=30)
-    plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=20)
+    last_rec_loss = run_autoencoder_training(data_loader_train, model, optimizer, criterion, device,
+                                             lr_scheduler=scheduler, epochs=30)
+
+    save_path = save_path.replace('ae', 'ae_{}'.format(round(last_rec_loss, 4)))
+    plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=30)
 
     torch.save(model.state_dict(), save_path + 'autoencoder.torch')
 
@@ -309,14 +315,16 @@ def train_together():
     data_loader_train_drugs = DataLoader(training_data_drugs, batch_size=64, shuffle=True)
     data_loader_train_controls = DataLoader(training_data_controls, batch_size=64, shuffle=True)
 
-    run_simultaneous_training(data_loader_train_drugs, data_loader_train_controls,
-                              ae, ae_optimizer, ae_criterion,
-                              cl, cl_optimizer, cl_criterion,
-                              device, 30)
+    last_rec_loss, last_acc = run_simultaneous_training(data_loader_train_drugs, data_loader_train_controls,
+                                                        ae, ae_optimizer, ae_criterion,
+                                                        cl, cl_optimizer, cl_criterion,
+                                                        device, 30)
+
+    save_path = save_path.replace('aecl', 'aecl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
 
     plot_reconstruction(data_loader_train_drugs, ae, save_to=save_path, n_images=30)
-    torch.save(ae.state_dict(), save_path + 'aecl1.torch')
-    torch.save(cl.state_dict(), save_path + 'aecl2.torch')
+    torch.save(ae.state_dict(), save_path + 'ae.torch')
+    torch.save(cl.state_dict(), save_path + 'cl.torch')
 
 
 if __name__ == "__main__":
