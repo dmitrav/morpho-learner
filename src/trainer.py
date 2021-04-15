@@ -67,8 +67,10 @@ def run_autoencoder_training(data_loader, model, optimizer, criterion, device, l
 
     return loss
 
+
 def run_classifier_training(data_loader_drugs, data_loader_controls, model, optimizer, criterion, device, lr_scheduler=None, epochs=10):
 
+    acc = 0
     for epoch in range(epochs):
 
         start = time.time()
@@ -84,14 +86,14 @@ def run_classifier_training(data_loader_drugs, data_loader_controls, model, opti
 
                 # process drugs data
                 outputs = model(batch_features)
-                train_loss += criterion(outputs, batch_labels)
-                true_negatives = (outputs.argmax(-1) == 0).float().detach().numpy()
+                train_loss += criterion(outputs, batch_labels.to(device))
+                true_negatives = (outputs.argmax(-1) == 0).cpu().float().detach().numpy()
 
                 # process controls data
                 batch_features, batch_labels = next(iter(data_loader_controls))
                 outputs = model(batch_features.float().to(device))
-                train_loss += criterion(outputs, batch_labels)
-                true_positives = (outputs.argmax(-1) == 1).float().detach().numpy()
+                train_loss += criterion(outputs, batch_labels.to(device))
+                true_positives = (outputs.argmax(-1) == 1).cpu().float().detach().numpy()
 
                 # compute accumulated gradients
                 train_loss.backward()
@@ -111,7 +113,9 @@ def run_classifier_training(data_loader_drugs, data_loader_controls, model, opti
             lr_scheduler.step()
 
         # display the epoch training loss
-        print("epoch {}/{}: {} sec, loss = {:.4f}, acc = {:.4f}".format(epoch + 1, epochs, int(time.time() - start), loss, acc))
+        print("epoch {}/{}: {} min, loss = {:.4f}, acc = {:.4f}".format(epoch + 1, epochs, int((time.time() - start) / 60), loss, acc))
+
+    return acc
 
 
 def run_simultaneous_training(data_loader_drugs, data_loader_controls,
@@ -240,12 +244,12 @@ def train_autoencoder():
     data_loader_train = DataLoader(training_data, batch_size=64, shuffle=True)
     model = Autoencoder().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.0003)
-    # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10, 20], gamma=0.5)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[15, 35], gamma=0.5)
     criterion = nn.BCELoss()
 
     # best loss = 0.6331
     last_rec_loss = run_autoencoder_training(data_loader_train, model, optimizer, criterion, device,
-                                             lr_scheduler=None, epochs=30)
+                                             lr_scheduler=scheduler, epochs=50)
 
     save_path = save_path.replace('ae', 'ae_{}'.format(round(last_rec_loss, 4)))
     plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=30)
@@ -255,20 +259,23 @@ def train_autoencoder():
 
 def train_classifier():
 
-    path_to_drugs = '/Users/{}/ETH/projects/morpho-learner/data/cut/'.format(user)
-    path_to_controls = '/Users/{}/ETH/projects/morpho-learner/data/cut_controls/'.format(user)
-    save_path = '/Users/{}/ETH/projects/morpho-learner/res/'.format(user)
+    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
+    path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
+    path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_0.6673\\'
+    save_path = 'D:\ETH\projects\morpho-learner\\res\\cl\\'
 
-    device = torch.device("cpu")
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # load trained autoencoder to use it in the transform
     ae = Autoencoder().to(device)
-    ae.load_state_dict(torch.load(save_path+'autoencoder.torch', map_location=device))
+    ae.load_state_dict(torch.load(path_to_ae_model+'autoencoder.torch', map_location=device))
     ae.eval()
 
-    transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0))).reshape(-1)
+    N = 200000  # like 5 images of each drug
+    transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+
     training_data_drugs = CustomImageDataset(path_to_drugs, 0, transform=transform)
-    training_data_drugs, test_data_drugs = torch.utils.data.random_split(training_data_drugs, [10000, 70000])
+    training_data_drugs, test_data_drugs = torch.utils.data.random_split(training_data_drugs, [N, training_data_drugs.__len__() - N])
 
     training_data_controls = CustomImageDataset(path_to_controls, 1, transform=transform)
 
@@ -280,9 +287,10 @@ def train_classifier():
     # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 50, 80], gamma=0.3)
     criterion = nn.CrossEntropyLoss()
 
-    run_classifier_training(data_loader_train_drugs, data_loader_train_controls,
-                            model, optimizer, criterion, device, epochs=10)
+    last_epoch_acc = run_classifier_training(data_loader_train_drugs, data_loader_train_controls,
+                                             model, optimizer, criterion, device, epochs=10)
 
+    save_path = save_path.replace('cl', 'cl_{}'.format(round(last_epoch_acc, 4)))
     torch.save(model.state_dict(), save_path + 'classifier.torch')
 
 
@@ -295,11 +303,11 @@ def train_together():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     ae = Autoencoder().to(device)
-    ae_optimizer = optim.Adam(ae.parameters(), lr=0.0003)
+    ae_optimizer = optim.Adam(ae.parameters(), lr=0.0001)
     ae_criterion = nn.BCELoss()
 
     cl = Classifier().to(device)
-    cl_optimizer = optim.Adam(cl.parameters(), lr=0.0009)
+    cl_optimizer = optim.Adam(cl.parameters(), lr=0.001)
     cl_criterion = nn.CrossEntropyLoss()
 
     N = 200000  # like 5 images of each drug
@@ -319,7 +327,7 @@ def train_together():
     last_rec_loss, last_acc = run_simultaneous_training(data_loader_train_drugs, data_loader_train_controls,
                                                         ae, ae_optimizer, ae_criterion,
                                                         cl, cl_optimizer, cl_criterion,
-                                                        device, 30)
+                                                        device, 50)
 
     save_path = save_path.replace('aecl', 'aecl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
 
