@@ -6,7 +6,7 @@ from torchvision.io import read_image
 import torch.multiprocessing as mp
 
 from src.constants import user
-from src.models import Autoencoder, Classifier
+from src.models import Autoencoder, Classifier, DeepClassifier
 
 
 class CustomImageDataset(Dataset):
@@ -257,7 +257,7 @@ def train_autoencoder():
     torch.save(model.state_dict(), save_path + 'autoencoder.torch')
 
 
-def train_classifier():
+def train_classifier(deep=False):
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
@@ -282,19 +282,30 @@ def train_classifier():
     data_loader_train_drugs = DataLoader(training_data_drugs, batch_size=64, shuffle=True)
     data_loader_train_controls = DataLoader(training_data_controls, batch_size=64, shuffle=True)
 
-    model = Classifier().to(device)
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    if deep:
+        model = DeepClassifier().to(device)
+    else:
+        model = Classifier().to(device)
+
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
     # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 50, 80], gamma=0.3)
     criterion = nn.CrossEntropyLoss()
 
     last_epoch_acc = run_classifier_training(data_loader_train_drugs, data_loader_train_controls,
                                              model, optimizer, criterion, device, epochs=10)
 
-    save_path = save_path.replace('cl', 'cl_{}'.format(round(last_epoch_acc, 4)))
+    if deep:
+        save_path = save_path.replace('cl', 'dcl_{}'.format(round(last_epoch_acc, 4)))
+    else:
+        save_path = save_path.replace('cl', 'cl_{}'.format(round(last_epoch_acc, 4)))
+
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
     torch.save(model.state_dict(), save_path + 'classifier.torch')
 
 
-def train_together():
+def train_together(deep=False):
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
@@ -306,7 +317,10 @@ def train_together():
     ae_optimizer = optim.Adam(ae.parameters(), lr=0.0001)
     ae_criterion = nn.BCELoss()
 
-    cl = Classifier().to(device)
+    if deep:
+        cl = DeepClassifier().to(device)
+    else:
+        cl = Classifier().to(device)
     cl_optimizer = optim.Adam(cl.parameters(), lr=0.001)
     cl_criterion = nn.CrossEntropyLoss()
 
@@ -329,7 +343,10 @@ def train_together():
                                                         cl, cl_optimizer, cl_criterion,
                                                         device, 50)
 
-    save_path = save_path.replace('aecl', 'aecl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
+    if deep:
+        save_path = save_path.replace('aecl', 'aedcl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
+    else:
+        save_path = save_path.replace('aecl', 'aecl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
 
     plot_reconstruction(data_loader_train_drugs, ae, save_to=save_path, n_images=30)
     torch.save(ae.state_dict(), save_path + 'ae.torch')
@@ -339,5 +356,5 @@ def train_together():
 if __name__ == "__main__":
     # train_autoencoder()
     # train_classifier()
-    train_together()
+    train_together(deep=True)
     pass

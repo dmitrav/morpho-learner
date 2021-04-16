@@ -73,3 +73,27 @@ class Classifier(nn.Module):
     def count_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
+
+class DeepClassifier(nn.Module):
+
+    def __init__(self, **kwargs):
+        super().__init__()
+
+        self.model = nn.Sequential(
+            nn.Linear(2048, 32),
+            nn.LeakyReLU(),
+            nn.Linear(32, 2),
+            nn.LeakyReLU(),
+            nn.Linear(2, 2),
+            nn.Softmax(dim=1)
+        )
+
+        print(self)
+        print('number of parameters: {}\n'.format(self.count_parameters()))
+
+    def forward(self, features):
+        return self.model(features)
+
+    def count_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
