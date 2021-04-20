@@ -11,4 +11,4 @@ from src.trainer import plot_reconstruction, train_together, train_autoencoder, 
 
 if __name__ == "__main__":
     # train_autoencoder()
-    train_classifier(deep=True)
+    train_classifier(5, batch_size=128, deep=True)
