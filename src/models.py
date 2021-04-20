@@ -80,11 +80,9 @@ class DeepClassifier(nn.Module):
         super().__init__()
 
         self.model = nn.Sequential(
-            nn.Linear(2048, 32),
+            nn.Linear(2048, 64),
             nn.LeakyReLU(),
-            nn.Linear(32, 2),
-            nn.LeakyReLU(),
-            nn.Linear(2, 2),
+            nn.Linear(64, 2),
             nn.Softmax(dim=1)
         )
 

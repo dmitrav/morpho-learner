@@ -280,14 +280,14 @@ def train_classifier(epochs, batch_size=64, deep=False):
     path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_0.6673\\'
     save_path = 'D:\ETH\projects\morpho-learner\\res\\cl\\'
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda')
 
     # load trained autoencoder to use it in the transform
     ae = Autoencoder().to(device)
     ae.load_state_dict(torch.load(path_to_ae_model+'autoencoder.torch', map_location=device))
     ae.eval()
 
-    N = 200000  # like 5 images of each drug
+    N = 50000  # like 5 images of each drug
     transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
     training_drugs = CustomImageDataset(path_to_drugs, 0, transform=transform)
@@ -376,4 +376,4 @@ def train_together(epochs, deep=False):
 if __name__ == "__main__":
     # train_autoencoder()
     # train_together(50, deep=True)
-    train_classifier(5, batch_size=64, deep=True)
+    train_classifier(10, batch_size=256, deep=True)

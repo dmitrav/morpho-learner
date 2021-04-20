@@ -1,5 +1,5 @@
 
-version = "v.0.0.10-cuda"
+version = "v.0.0.11-cuda"
 user = 'andreidm'
 
 drugs = ['Chlormethine', 'Clofarabine', 'Panzem-2-ME2', 'Pemetrexed', 'Asparaginase',
