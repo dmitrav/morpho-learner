@@ -404,12 +404,12 @@ if __name__ == "__main__":
 
     device = torch.device('cuda')
 
-    path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\aecl_0.6674_0.7862\\ae.torch"
+    path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\aecl_0.6674_0.7862_e70\\ae.torch"
     ae = Autoencoder().to(device)
     ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
     ae.eval()
 
-    path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\aecl_0.6674_0.7862\cl.torch"
+    path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\aecl_0.6674_0.7862_e70\cl.torch"
     cl = Classifier().to(device)
     cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
     cl.eval()
