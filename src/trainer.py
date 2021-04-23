@@ -347,7 +347,7 @@ def train_classifier(epochs, batch_size=64, deep=False):
     torch.save(model.state_dict(), save_path + 'classifier.torch')
 
 
-def train_together(epochs, batch_size=256):
+def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256):
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
@@ -355,23 +355,28 @@ def train_together(epochs, batch_size=256):
 
     device = torch.device('cuda')
 
-    ae = Autoencoder().to(device)
-    ae_optimizer = optim.Adam(ae.parameters(), lr=0.0001)
+    if trained_ae is not None:
+        ae = trained_ae
+    else:
+        ae = Autoencoder().to(device)
+    ae_optimizer = optim.Adam(ae.parameters(), lr=0.00015)
     ae_criterion = nn.BCELoss()
 
-    cl = Classifier().to(device)
-    cl_optimizer = optim.Adam(cl.parameters(), lr=0.001)
+    if trained_cl is not None:
+        cl = trained_cl
+    else:
+        cl = Classifier().to(device)
+    cl_optimizer = optim.Adam(cl.parameters(), lr=0.00045)
     cl_criterion = nn.CrossEntropyLoss()
 
-    N = 200000  # like 5 images of each drug
+    N = 380000  # ~90%
 
     training_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)
-    training_drugs, the_rest = torch.utils.data.random_split(training_drugs, [N, training_drugs.__len__() - N])
-    validation_drugs, _ = torch.utils.data.random_split(the_rest, [N // 2, the_rest.__len__() - N // 2])
+    training_drugs, validation_drugs = torch.utils.data.random_split(training_drugs, [N, training_drugs.__len__() - N])
 
     training_controls = CustomImageDataset(path_to_controls, 1, transform=lambda x: x / 255.)
     training_controls, the_rest = torch.utils.data.random_split(training_controls, [N, training_controls.__len__() - N])
-    validation_controls, _ = torch.utils.data.random_split(the_rest, [N // 2, the_rest.__len__() - N // 2])
+    validation_controls, _ = torch.utils.data.random_split(the_rest, [len(validation_drugs), the_rest.__len__() - len(validation_drugs)])
 
     print('total drugs:', training_drugs.__len__())
     print('total controls:', training_controls.__len__(), '\n')
@@ -396,4 +401,17 @@ def train_together(epochs, batch_size=256):
 if __name__ == "__main__":
     # train_autoencoder()
     # train_classifier(10, batch_size=256)
-    train_together(50)
+
+    device = torch.device('cuda')
+
+    path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\aecl_0.6674_0.7862\\ae.torch"
+    ae = Autoencoder().to(device)
+    ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
+    ae.eval()
+
+    path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\aecl_0.6674_0.7862\cl.torch"
+    cl = Classifier().to(device)
+    cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
+    cl.eval()
+
+    train_together(30, trained_ae=ae, trained_cl=cl)

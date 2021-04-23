@@ -58,9 +58,9 @@ class Classifier(nn.Module):
         super().__init__()
 
         self.model = nn.Sequential(
-            nn.Linear(2048, 64),
+            nn.Linear(2048, 256),
             nn.LeakyReLU(),
-            nn.Linear(64, 2),
+            nn.Linear(256, 2),
             nn.Softmax(dim=1)
         )
 
