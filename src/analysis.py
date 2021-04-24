@@ -107,7 +107,7 @@ def plot_drugs_umaps(path_to_drugs, save_path):
                      (10, 'cosine'), (25, 'cosine'), (50, 'cosine'), (100, 'cosine'), (500, 'cosine'),
                      (10, 'correlation'), (25, 'correlation'), (50, 'correlation'), (100, 'correlation'), (500, 'correlation')]
 
-        plot_umap_with_pars_and_labels(encodings, umap_pars, umap_labels, save_path, umap_title='drugs')
+        plot_umap_with_pars_and_labels(encodings, umap_pars, umap_labels, save_path, umap_title=drug)
 
 
 if __name__ == "__main__":

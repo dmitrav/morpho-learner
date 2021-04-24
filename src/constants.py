@@ -1,5 +1,5 @@
 
-version = "v.0.0.17-cuda"
+version = "v.0.0.18-cuda"
 user = 'andreidm'
 
 cell_lines = ['ACHN', 'HT29', 'M14',  # batch 1
