@@ -1,5 +1,5 @@
 
-import os, pandas, time, torch, numpy, umap, seaborn, shutil
+import os, pandas, time, torch, numpy, umap, seaborn, shutil, random
 from matplotlib import pyplot
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import normalize
@@ -205,7 +205,9 @@ def save_cluster_members(path_to_all_images, drug_image_files, drug_image_cluste
         if not os.path.exists(save_to + drug + '\\{}'.format(cluster)):
             os.makedirs(save_to + drug + '\\{}'.format(cluster))
 
-        images_to_save = [f for f in drug_image_files if drug_image_clusters[drug_image_files.index(f)] == cluster][:n]
+        images_to_save = [f for f in drug_image_files if drug_image_clusters[drug_image_files.index(f)] == cluster]
+        images_to_save = random.sample(images_to_save, min(n, len(images_to_save)))
+
         # copy n representatives of cluster
         for image in images_to_save:
             shutil.copyfile(path_to_all_images + image, save_to + drug + "\\{}\\".format(cluster) + image)
