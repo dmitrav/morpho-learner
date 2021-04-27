@@ -1,6 +1,15 @@
 
-version = "v.0.0.22-cuda"
+version = "v.0.0.24-cuda"
 user = 'andreidm'
+
+
+def get_type_by_name(name):
+    if name in cell_lines:
+        return 'cell line'
+    elif name in drugs:
+        return 'drug'
+    else:
+        raise ValueError("Unknown cell line or drug: {}".format(name))
 
 cell_lines = ['ACHN', 'HT29', 'M14',  # batch 1
               'IGROV1', 'MDAMB231', 'SF539',   # batch 2

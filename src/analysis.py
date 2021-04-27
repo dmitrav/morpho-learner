@@ -12,6 +12,8 @@ from scipy.stats import ks_2samp, mannwhitneyu, kruskal, fisher_exact
 from src.models import Autoencoder
 from src.constants import cell_lines as all_cell_lines
 from src.constants import drugs as all_drugs
+from src.constants import get_type_by_name
+
 
 def plot_umap_with_pars_and_labels(data, parameters, labels, save_to, umap_title=""):
 
@@ -40,7 +42,7 @@ def plot_umap_with_pars_and_labels(data, parameters, labels, save_to, umap_title
             print('{}_umap_hue={}_n={}_metric={}.png saved'.format(umap_title, hue, neighbors, metric))
 
 
-def plot_full_data_umaps(path_to_drugs, save_path):
+def plot_full_data_umaps(path_to_drugs, save_path, transform):
 
     image_paths = [f for f in os.listdir(path_to_drugs)[::2]]
     cell_lines = [f.split('_')[0] for f in image_paths]
@@ -64,7 +66,7 @@ def plot_full_data_umaps(path_to_drugs, save_path):
     plot_umap_with_pars_and_labels(encodings, umap_pars, umap_labels, save_path)
 
 
-def plot_cell_lines_umaps(path_to_drugs, save_path):
+def plot_cell_lines_umaps(path_to_drugs, save_path, transform):
 
     for cell_line in tqdm(all_cell_lines):
 
@@ -89,7 +91,7 @@ def plot_cell_lines_umaps(path_to_drugs, save_path):
         plot_umap_with_pars_and_labels(encodings, umap_pars, umap_labels, save_path, umap_title=cell_line)
 
 
-def plot_drugs_umaps(path_to_drugs, save_path):
+def plot_drugs_umaps(path_to_drugs, save_path, transform):
 
     for drug in tqdm(all_drugs):
 
@@ -136,17 +138,17 @@ def plot_cluster_capacity(labels, grouping_factor, save_to):
     print('cluster capacity plot saved')
 
 
-def plot_cluster_enrichments_for_drug(clusters, cell_lines, drug, save_to):
+def plot_cluster_enrichments(clusters, image_ids, image_grouping_factor, save_to):
 
-    if not os.path.exists(save_to + drug):
-        os.makedirs(save_to + drug)
+    if not os.path.exists(save_to + image_grouping_factor):
+        os.makedirs(save_to + image_grouping_factor)
 
     # compute cluster counts for cell lines
-    unique_cls = list(set(cell_lines))
+    unique_cls = list(set(image_ids))
     unique_clusters = sorted(list(set(clusters)))
     cluster_counts = pandas.DataFrame(0, index=unique_clusters, columns=unique_cls)
     for i, cluster in enumerate(clusters):
-        cluster_counts.loc[cluster, cell_lines[i]] += 1
+        cluster_counts.loc[cluster, image_ids[i]] += 1
 
     # calculate enrichments
     cluster_enrichments = calculate_cluster_enrichments(cluster_counts)
@@ -157,13 +159,13 @@ def plot_cluster_enrichments_for_drug(clusters, cell_lines, drug, save_to):
                           yticklabels=cluster_enrichments.index,
                           cmap='rocket', vmin=0, vmax=5)
     res.set_xticklabels(res.get_xmajorticklabels(), fontsize=8)
-    pyplot.title("Cluster enrichments for drug {}".format(drug))
+    pyplot.title("Cluster enrichments for {} {}".format(get_type_by_name(image_grouping_factor), image_grouping_factor))
     pyplot.tight_layout()
     pyplot.xticks(rotation=45)
     # pyplot.show()
-    pyplot.savefig(save_to + drug + '\\cluster_enrichments_{}.pdf'.format(drug))
+    pyplot.savefig(save_to + image_grouping_factor + '\\cluster_enrichments_{}.pdf'.format(image_grouping_factor))
     pyplot.close('all')
-    print("cluster enrichments plots for drug {} saved".format(drug))
+    print("cluster enrichments plots for {} {} saved".format(get_type_by_name(image_grouping_factor), image_grouping_factor))
 
 
 def calculate_cluster_enrichments(cluster_counts):
@@ -197,45 +199,40 @@ def calculate_cluster_enrichments(cluster_counts):
     return cluster_enrichments
 
 
-def save_cluster_members(path_to_all_images, drug_image_files, drug_image_clusters, drug, save_to, n=50):
+def save_cluster_members(path_to_drug_images, image_files, image_clusters, image_grouping_factor, save_to, n=50,  path_to_control_images=None):
 
-    unique_clusters = sorted(list(set(drug_image_clusters)))
+    unique_clusters = sorted(list(set(image_clusters)))
 
     for cluster in unique_clusters:
-        if not os.path.exists(save_to + drug + '\\{}'.format(cluster)):
-            os.makedirs(save_to + drug + '\\{}'.format(cluster))
+        if not os.path.exists(save_to + image_grouping_factor + '\\{}'.format(cluster)):
+            os.makedirs(save_to + image_grouping_factor + '\\{}'.format(cluster))
 
-        images_to_save = [f for f in drug_image_files if drug_image_clusters[drug_image_files.index(f)] == cluster]
+        images_to_save = [f for f in image_files if image_clusters[image_files.index(f)] == cluster]
         images_to_save = random.sample(images_to_save, min(n, len(images_to_save)))
 
         # copy n representatives of cluster
         for image in images_to_save:
-            shutil.copyfile(path_to_all_images + image, save_to + drug + "\\{}\\".format(cluster) + image)
+            if path_to_control_images is None:
+                shutil.copyfile(path_to_drug_images + image, save_to + image_grouping_factor + "\\{}\\".format(cluster) + image)
+            else:
+                if 'DMSO' in image:
+                    shutil.copyfile(path_to_control_images + image, save_to + image_grouping_factor + "\\{}\\".format(cluster) + image)
+                else:
+                    shutil.copyfile(path_to_drug_images + image, save_to + image_grouping_factor + "\\{}\\".format(cluster) + image)
+
     print("cluster members saved")
 
 
-def plot_drugs_clustering(path_to_drugs, save_path):
+def plot_drugs_clustering(path_to_drugs, save_path, transform,
+                          min_cluster_size=20,  # gives small noise percent & reasonable number of clusters
+                          min_samples=1):  # allow less conservative clustering
 
     for drug in tqdm(all_drugs):
 
-        image_paths = [f for f in os.listdir(path_to_drugs) if drug in f]
-        cell_lines = [f.split('_')[0] for f in image_paths]
-        plates = [f.split('_')[2] for f in image_paths]
-        wells = [f.split('_')[3] for f in image_paths]
-        dates = ['_'.join(f.split('_')[-3:]) for f in image_paths]
-
-        # get encodings
-        encodings = []
-        for path in image_paths:
-            img = read_image(path_to_drugs + path)
-            img_encoded = transform(img)
-            encodings.append(img_encoded.detach().cpu().numpy())
+        encodings, image_ids = get_image_encodings_from_path(path_to_drugs, drug, transform)
         encodings = numpy.array(encodings)
 
         # cluster encodings
-        min_cluster_size = 20  # gives small noise percent & reasonable number of clusters
-        min_samples = 1  # allow less conservative clustering
-
         normalized = normalize(encodings, norm='l2')  # after this 'euclidean' should approx. work as 'cosine'
         clusterer = HDBSCAN(metric='euclidean', min_samples=min_samples, min_cluster_size=min_cluster_size, allow_single_cluster=False)
         clusterer.fit(normalized)
@@ -248,11 +245,67 @@ def plot_drugs_clustering(path_to_drugs, save_path):
         print('noise={}%\n'.format(noise))
 
         # calculate and plot enrichments
-        plot_cluster_enrichments_for_drug(clusters, cell_lines, drug, save_path)
+        plot_cluster_enrichments(clusters, image_ids['cell_lines'], drug, save_path)
         # plot cluster sizes
         plot_cluster_capacity(clusters, drug, save_path)
         # save cluster representatives
-        save_cluster_members(path_to_drugs, image_paths, clusters, drug, save_path)
+        save_cluster_members(path_to_drugs, image_ids['filenames'], clusters, drug, save_path)
+
+
+def get_image_encodings_from_path(path, common_image_id, transform):
+
+    encodings = []
+
+    filenames = [f for f in os.listdir(path) if common_image_id in f]
+    image_ids = {
+        'filenames': filenames,
+        'cell_lines': [f.split('_')[0] for f in filenames],
+        'plates': [f.split('_')[2] for f in filenames],
+        'wells': [f.split('_')[3] for f in filenames],
+        'drugs': [f.split('_')[4] for f in filenames],
+        'dates': ['_'.join(f.split('_')[-3:]) for f in filenames]
+    }
+
+    # get encodings
+    for file in filenames:
+        img = read_image(path_to_drugs + file)
+        img_encoded = transform(img)
+        encodings.append(img_encoded.detach().cpu().numpy())
+
+    return encodings, image_ids
+
+
+def plot_cell_lines_clustering(path_to_drugs, path_to_controls, save_path, transform,
+                               min_cluster_size=20,  # gives small noise percent & reasonable number of clusters
+                               min_samples=1):  # allow less conservative clustering
+
+    for cell_line in tqdm(all_cell_lines):
+
+        drugs_encodings, drugs_ids = get_image_encodings_from_path(path_to_drugs, cell_line, transform)
+        controls_encodings, controls_ids = get_image_encodings_from_path(path_to_controls, cell_line, transform)
+
+        encodings = numpy.array(drugs_encodings.extend(controls_encodings))
+        drugs = [*drugs_ids['drugs'], *controls_ids['drugs']]
+        image_filenames = [*drugs_ids['filenames'], *controls_ids['filenames']]
+
+        # cluster encodings
+        normalized = normalize(encodings, norm='l2')  # after this 'euclidean' should approx. work as 'cosine'
+        clusterer = HDBSCAN(metric='euclidean', min_samples=min_samples, min_cluster_size=min_cluster_size, allow_single_cluster=False)
+        clusterer.fit(normalized)
+        clusters = clusterer.labels_
+
+        n_clusters = numpy.max(clusters) + 1
+        noise = int(numpy.sum(clusters == -1) / len(clusters) * 100)
+        print('clustering of cell line {}:\n'.format(cell_line))
+        print('min_cluster_size={}, min_samples={}, n clusters={}'.format(min_cluster_size, min_samples, n_clusters))
+        print('noise={}%\n'.format(noise))
+
+        # calculate and plot enrichments
+        plot_cluster_enrichments(clusters, drugs, cell_line, save_path)
+        # plot cluster sizes
+        plot_cluster_capacity(clusters, cell_line, save_path)
+        # save cluster representatives
+        save_cluster_members(path_to_drugs, image_filenames, clusters, cell_line, save_path, path_to_control_images=path_to_controls)
 
 
 if __name__ == "__main__":
@@ -270,13 +323,13 @@ if __name__ == "__main__":
     transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
     # save_path = path_to_ae_model + 'full_data_umaps\\'
-    # plot_full_data_umaps(path_to_drugs, save_path)
+    # plot_full_data_umaps(path_to_drugs, save_path, transform)
 
     # save_path = path_to_ae_model + 'cell_lines_umaps\\'
-    # plot_cell_lines_umaps(path_to_drugs, save_path)
+    # plot_cell_lines_umaps(path_to_drugs, save_path, transform)
 
     # save_path = path_to_ae_model + 'drugs_umaps\\'
-    # plot_drugs_umaps(path_to_drugs, save_path)
+    # plot_drugs_umaps(path_to_drugs, save_path, transform)
 
-    save_path = path_to_ae_model + 'drugs_clustering\\'
-    plot_drugs_clustering(path_to_drugs, save_path)
+    save_path = path_to_ae_model + 'drugs_clustering_mcs=10_ms=1\\'
+    plot_drugs_clustering(path_to_drugs, save_path, transform, min_cluster_size=10, min_samples=1)
