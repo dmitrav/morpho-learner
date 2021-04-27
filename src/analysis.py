@@ -126,7 +126,7 @@ def plot_cluster_capacity(labels, grouping_factor, save_to):
     for cluster in clusters:
         cluster_capacity.loc[cluster_capacity['cluster'] == cluster, 'capacity'] += sum([x == cluster for x in labels])
 
-    pyplot.figure()
+    pyplot.figure(figsize=(12,6))
     seaborn.barplot(x='cluster', y='capacity', data=cluster_capacity)
     pyplot.xlabel('Cluster')
     pyplot.ylabel('Number of images')
@@ -252,11 +252,14 @@ def plot_drugs_clustering(path_to_drugs, save_path, transform,
         save_cluster_members(path_to_drugs, image_ids['filenames'], clusters, drug, save_path)
 
 
-def get_image_encodings_from_path(path, common_image_id, transform):
+def get_image_encodings_from_path(path, common_image_id, transform, n=None):
 
     encodings = []
 
     filenames = [f for f in os.listdir(path) if common_image_id in f]
+    if n is not None:
+        filenames = random.sample(filenames, n)
+
     image_ids = {
         'filenames': filenames,
         'cell_lines': [f.split('_')[0] for f in filenames],
@@ -268,7 +271,7 @@ def get_image_encodings_from_path(path, common_image_id, transform):
 
     # get encodings
     for file in filenames:
-        img = read_image(path_to_drugs + file)
+        img = read_image(path + file)
         img_encoded = transform(img)
         encodings.append(img_encoded.detach().cpu().numpy())
 
@@ -282,9 +285,9 @@ def plot_cell_lines_clustering(path_to_drugs, path_to_controls, save_path, trans
     for cell_line in tqdm(all_cell_lines):
 
         drugs_encodings, drugs_ids = get_image_encodings_from_path(path_to_drugs, cell_line, transform)
-        controls_encodings, controls_ids = get_image_encodings_from_path(path_to_controls, cell_line, transform)
+        controls_encodings, controls_ids = get_image_encodings_from_path(path_to_controls, cell_line, transform, n=int(0.25 * len(drugs_encodings)))
 
-        encodings = numpy.array(drugs_encodings.extend(controls_encodings))
+        encodings = numpy.array([*drugs_encodings, *controls_encodings])
         drugs = [*drugs_ids['drugs'], *controls_ids['drugs']]
         image_filenames = [*drugs_ids['filenames'], *controls_ids['filenames']]
 
@@ -311,6 +314,7 @@ def plot_cell_lines_clustering(path_to_drugs, path_to_controls, save_path, trans
 if __name__ == "__main__":
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
+    path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
     path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_0.6672_0.8192_e100\\'
 
     device = torch.device('cuda')
@@ -331,5 +335,8 @@ if __name__ == "__main__":
     # save_path = path_to_ae_model + 'drugs_umaps\\'
     # plot_drugs_umaps(path_to_drugs, save_path, transform)
 
-    save_path = path_to_ae_model + 'drugs_clustering_mcs=10_ms=1\\'
-    plot_drugs_clustering(path_to_drugs, save_path, transform, min_cluster_size=10, min_samples=1)
+    # save_path = path_to_ae_model + 'drugs_clustering_mcs=10_ms=1\\'
+    # plot_drugs_clustering(path_to_drugs, save_path, transform, min_cluster_size=10, min_samples=1)
+
+    save_path = path_to_ae_model + 'cell_lines_clustering_mcs=10_ms=1\\'
+    plot_cell_lines_clustering(path_to_drugs, path_to_controls, save_path, transform, min_cluster_size=10, min_samples=1)
