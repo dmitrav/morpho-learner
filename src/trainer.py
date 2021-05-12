@@ -5,7 +5,6 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision.io import read_image
 import torch.multiprocessing as mp
 
-from src.constants import user
 from src.models import Autoencoder, Classifier, DeepClassifier
 
 
@@ -32,14 +31,15 @@ class CustomImageDataset(Dataset):
         return sample
 
 
-def run_autoencoder_training(data_loader, model, optimizer, criterion, device, lr_scheduler=None, epochs=10):
+def run_autoencoder_training(data_loader_train, data_loader_test, model, optimizer, criterion, device, lr_scheduler=None, epochs=10):
 
     loss = 0
+    val_loss = 0
     for epoch in range(epochs):
 
         start = time.time()
         loss = 0
-        for batch_features in data_loader:
+        for batch_features in data_loader_train:
             # load it to the active device
             batch_features = batch_features[0].float().to(device)
             # reset the gradients back to zero
@@ -56,14 +56,23 @@ def run_autoencoder_training(data_loader, model, optimizer, criterion, device, l
             loss += train_loss.item()
 
         # compute the epoch training loss
-        loss = loss / len(data_loader)
+        loss = loss / len(data_loader_train)
+
+        val_loss = 0
+        for batch_features in data_loader_test:
+            batch_features = batch_features[0].float().to(device)
+            outputs = model(batch_features)
+            val_loss += criterion(outputs, batch_features).item()
+
+        # compute the epoch training loss
+        val_loss = val_loss / len(data_loader_test)
 
         # update lr
         if lr_scheduler is not None:
             lr_scheduler.step()
 
         # display the epoch training loss
-        print("epoch {}/{}: {} min, loss = {:.4f}".format(epoch + 1, epochs, int((time.time() - start) / 60), loss))
+        print("epoch {}/{}: {} min, loss = {:.4f}, val_loss = {:.4f}".format(epoch + 1, epochs, int((time.time() - start) / 60), loss, val_loss))
 
     return loss
 
@@ -275,18 +284,19 @@ def train_autoencoder(epochs, batch_size=256):
     device = torch.device('cuda')
 
     N = 380000  # ~90%
-
     training_data = CustomImageDataset(path_to_data, 0, transform=lambda x: x / 255.)
     training_data, test_data = torch.utils.data.random_split(training_data, [N, training_data.__len__() - N])
 
     data_loader_train = DataLoader(training_data, batch_size=batch_size, shuffle=True)
+    data_loader_test = DataLoader(test_data, batch_size=batch_size, shuffle=True)
+
     model = Autoencoder().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
     # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[15, 35], gamma=0.5)
     criterion = nn.BCELoss()
 
     # best loss = 0.6331
-    last_rec_loss = run_autoencoder_training(data_loader_train, model, optimizer, criterion, device, epochs=epochs)
+    last_rec_loss = run_autoencoder_training(data_loader_train, data_loader_test, model, optimizer, criterion, device, epochs=epochs)
 
     save_path = save_path.replace('ae', 'ae_{}'.format(round(last_rec_loss, 4)))
     plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=50)
@@ -294,7 +304,7 @@ def train_autoencoder(epochs, batch_size=256):
     torch.save(model.state_dict(), save_path + 'autoencoder.torch')
 
 
-def train_classifier(epochs, trained_ae, batch_size=256, deep=False):
+def train_classifier_with_pretrained_encoder(epochs, trained_ae, batch_size=256, deep=False):
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
@@ -338,6 +348,47 @@ def train_classifier(epochs, trained_ae, batch_size=256, deep=False):
         os.makedirs(save_path)
 
     torch.save(model.state_dict(), save_path + 'classifier.torch')
+
+
+def train_deep_classifier_alone(epochs, batch_size=256):
+
+    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
+    path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
+    save_path = 'D:\ETH\projects\morpho-learner\\res\\dcl\\'
+
+    device = torch.device('cuda')
+
+    N = 380000  # ~90%
+    transform = lambda x: x / 255.
+
+    training_drugs = CustomImageDataset(path_to_drugs, 0, transform=transform)
+    training_drugs, the_rest = torch.utils.data.random_split(training_drugs, [N, training_drugs.__len__() - N])
+    validation_drugs, _ = torch.utils.data.random_split(the_rest, [N // 2, the_rest.__len__() - N // 2])
+
+    training_controls = CustomImageDataset(path_to_controls, 1, transform=transform)
+    training_controls, the_rest = torch.utils.data.random_split(training_controls, [N, training_controls.__len__() - N])
+    validation_controls, _ = torch.utils.data.random_split(the_rest, [N // 2, the_rest.__len__() - N // 2])
+
+    loader_train_drugs = DataLoader(training_drugs, batch_size=batch_size, shuffle=True)
+    loader_train_controls = DataLoader(training_controls, batch_size=batch_size, shuffle=True)
+    loader_val_drugs = DataLoader(validation_drugs, batch_size=batch_size, shuffle=True)
+    loader_val_controls = DataLoader(validation_controls, batch_size=batch_size, shuffle=True)
+
+    model = DeepClassifier().to(device)
+
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 50, 80], gamma=0.3)
+    criterion = nn.CrossEntropyLoss()
+
+    last_epoch_acc = run_classifier_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
+                                             model, optimizer, criterion, device, epochs=epochs)
+
+    save_path = save_path.replace('dcl', 'dcl_{}'.format(round(last_epoch_acc, 4)))
+
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    torch.save(model.state_dict(), save_path + 'deep_classifier.torch')
 
 
 def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256):
@@ -394,11 +445,11 @@ def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256):
 if __name__ == "__main__":
 
     # # TRAIN AUTOENCODER ALONE
-    train_autoencoder(100)
+    train_autoencoder(60)
 
-    device = torch.device('cuda')
-
-    # # TRAIN CLASSIFIER ALONE
+    # device = torch.device('cuda')
+    #
+    # # TRAIN CLASSIFIER WITH PRETRAINED AUTOENCODER
     # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_0.6673\\'
     # # load trained autoencoder to use it in the transform
     # ae = Autoencoder().to(device)
