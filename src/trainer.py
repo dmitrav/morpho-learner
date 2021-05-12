@@ -267,50 +267,43 @@ def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10)
             pyplot.show()
 
 
-def train_autoencoder(epochs):
+def train_autoencoder(epochs, batch_size=256):
 
     path_to_data = 'D:\ETH\projects\morpho-learner\data\cut\\'
     save_path = 'D:\ETH\projects\morpho-learner\\res\\ae\\'
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda')
 
-    N = 200000  # like 5 images of each drug
+    N = 380000  # ~90%
 
     training_data = CustomImageDataset(path_to_data, 0, transform=lambda x: x / 255.)
     training_data, test_data = torch.utils.data.random_split(training_data, [N, training_data.__len__() - N])
 
-    data_loader_train = DataLoader(training_data, batch_size=64, shuffle=True)
+    data_loader_train = DataLoader(training_data, batch_size=batch_size, shuffle=True)
     model = Autoencoder().to(device)
-    optimizer = optim.Adam(model.parameters(), lr=0.0003)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[15, 35], gamma=0.5)
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[15, 35], gamma=0.5)
     criterion = nn.BCELoss()
 
     # best loss = 0.6331
-    last_rec_loss = run_autoencoder_training(data_loader_train, model, optimizer, criterion, device,
-                                             lr_scheduler=scheduler, epochs=epochs)
+    last_rec_loss = run_autoencoder_training(data_loader_train, model, optimizer, criterion, device, epochs=epochs)
 
     save_path = save_path.replace('ae', 'ae_{}'.format(round(last_rec_loss, 4)))
-    plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=30)
+    plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=50)
 
     torch.save(model.state_dict(), save_path + 'autoencoder.torch')
 
 
-def train_classifier(epochs, batch_size=64, deep=False):
+def train_classifier(epochs, trained_ae, batch_size=256, deep=False):
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
-    path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_0.6673\\'
     save_path = 'D:\ETH\projects\morpho-learner\\res\\cl\\'
 
     device = torch.device('cuda')
 
-    # load trained autoencoder to use it in the transform
-    ae = Autoencoder().to(device)
-    ae.load_state_dict(torch.load(path_to_ae_model+'autoencoder.torch', map_location=device))
-    ae.eval()
-
-    N = 50000  # like 5 images of each drug
-    transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+    N = 380000  # ~90%
+    transform = lambda x: trained_ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
     training_drugs = CustomImageDataset(path_to_drugs, 0, transform=transform)
     training_drugs, the_rest = torch.utils.data.random_split(training_drugs, [N, training_drugs.__len__() - N])
@@ -330,7 +323,7 @@ def train_classifier(epochs, batch_size=64, deep=False):
     else:
         model = Classifier().to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=0.0004)
     # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 50, 80], gamma=0.3)
     criterion = nn.CrossEntropyLoss()
 
@@ -399,19 +392,30 @@ def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256):
 
 
 if __name__ == "__main__":
-    # train_autoencoder()
-    # train_classifier(10, batch_size=256)
+
+    # # TRAIN AUTOENCODER ALONE
+    train_autoencoder(100)
 
     device = torch.device('cuda')
 
-    path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\aecl_0.6674_0.7862_e70\\ae.torch"
-    ae = Autoencoder().to(device)
-    ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
-    ae.eval()
+    # # TRAIN CLASSIFIER ALONE
+    # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_0.6673\\'
+    # # load trained autoencoder to use it in the transform
+    # ae = Autoencoder().to(device)
+    # ae.load_state_dict(torch.load(path_to_ae_model+'autoencoder.torch', map_location=device))
+    # ae.eval()
+    #
+    # train_classifier(100, ae)
 
-    path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\aecl_0.6674_0.7862_e70\cl.torch"
-    cl = Classifier().to(device)
-    cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
-    cl.eval()
-
-    train_together(30, trained_ae=ae, trained_cl=cl)
+    # # TRAIN TOGETHER
+    # path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\aecl_0.6674_0.7862_e70\\ae.torch"
+    # ae = Autoencoder().to(device)
+    # ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
+    # ae.eval()
+    #
+    # path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\aecl_0.6674_0.7862_e70\cl.torch"
+    # cl = Classifier().to(device)
+    # cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
+    # cl.eval()
+    #
+    # train_together(30, trained_ae=ae, trained_cl=cl)

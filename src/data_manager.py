@@ -2,14 +2,13 @@
 import os, shutil, numpy, pandas
 from PIL import Image
 from tqdm import tqdm
-from src.constants import user
 from src.constants import drugs as all_drug_names
 
 
 class DataManager:
 
-    data_path = '/Users/{}/ETH/projects/morpho-learner/data/HT29_CL1_P1/'.format(user)
-    meta_path = '/Users/{}/ETH/projects/pheno-ml/data/metadata/'.format(user)
+    data_path = '/Users/{}/ETH/projects/morpho-learner/data/HT29_CL1_P1/'
+    meta_path = '/Users/{}/ETH/projects/pheno-ml/data/metadata/'
 
     remote_data_path = '/Volumes/biol_imsb_sauer_1/users/Andrei/pheno-ml/cell_line_images/batch_1/HT29_CL1_P1/'
 
@@ -147,8 +146,8 @@ class DataManager:
 
 if __name__ == "__main__":
 
-    path_to_batches = '/Users/{}/ETH/projects/pheno-ml/data/cropped/'.format(user)
-    save_to_path = '/Users/{}/ETH/projects/morpho-learner/data/'.format(user)
+    path_to_batches = '/Users/{}/ETH/projects/pheno-ml/data/cropped/'
+    save_to_path = '/Users/{}/ETH/projects/morpho-learner/data/'
 
     dm = DataManager(path_to_batches)
     dm.cut_images_from_all_batches_and_save(save_to_path, 16)

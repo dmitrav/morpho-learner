@@ -1,6 +1,5 @@
 
-version = "v.0.1.0-cuda"
-user = 'andreidm'
+version = "v.0.1.1-cuda"
 
 
 def get_type_by_name(name):
