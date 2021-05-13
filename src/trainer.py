@@ -146,7 +146,7 @@ def run_classifier_training(loader_train_drugs, loader_train_controls, loader_va
 def run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
                               ae_model, ae_optimizer, ae_criterion,
                               cl_model, cl_optimizer, cl_criterion,
-                              device, epochs=10):
+                              device, epochs=10, deep_cl=True):
     rec_loss_epoch = 0
     acc_epoch = 0
     for epoch in range(epochs):
@@ -165,12 +165,18 @@ def run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_
 
             # get features of drugs
             batch_features = batch_features.float().to(device)
-            # retrieve encodings
-            encodings = ae_model.encoder(batch_features)
-            # reshape fo classifier input
-            encodings = torch.reshape(encodings, (encodings.shape[0], -1))
-            # run through classifier
-            outputs = cl_model(encodings)
+
+            if deep_cl:
+                # encoder is already "built-in"
+                outputs = cl_model(batch_features)
+            else:
+                # retrieve encodings
+                encodings = ae_model.encoder(batch_features)
+                # reshape fo classifier input
+                encodings = torch.reshape(encodings, (encodings.shape[0], -1))
+                # run through classifier
+                outputs = cl_model(encodings)
+
             # calculate loss on drugs
             cl_loss = cl_criterion(outputs, batch_labels.to(device))
             true_negatives = (outputs.argmax(-1) == 0).cpu().float().detach().numpy()
@@ -178,12 +184,18 @@ def run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_
             # get features of controls
             control_features, control_labels = next(iter(loader_train_controls))
             control_features = control_features.float().to(device)
-            # retrieve encodings
-            encodings = ae_model.encoder(control_features)
-            # reshape fo classifier input
-            encodings = torch.reshape(encodings, (encodings.shape[0], -1))
-            # run through classifier
-            outputs = cl_model(encodings)
+
+            if deep_cl:
+                # encoder is already "built-in"
+                outputs = cl_model(control_features)
+            else:
+                # retrieve encodings
+                encodings = ae_model.encoder(control_features)
+                # reshape fo classifier input
+                encodings = torch.reshape(encodings, (encodings.shape[0], -1))
+                # run through classifier
+                outputs = cl_model(encodings)
+
             true_positives = (outputs.argmax(-1) == 1).cpu().float().detach().numpy()
             # add loss on controls
             cl_loss += cl_criterion(outputs, control_labels.to(device))
@@ -227,17 +239,27 @@ def run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_
         for batch_features, batch_labels in loader_val_drugs:
             # process drugs
             batch_features = batch_features.float().to(device)
-            encodings = ae_model.encoder(batch_features)
-            encodings = torch.reshape(encodings, (encodings.shape[0], -1))
-            outputs = cl_model(encodings)
+
+            if deep_cl:
+                outputs = cl_model(batch_features)
+            else:
+                encodings = ae_model.encoder(batch_features)
+                encodings = torch.reshape(encodings, (encodings.shape[0], -1))
+                outputs = cl_model(encodings)
+
             true_negatives = (outputs.argmax(-1) == 0).cpu().float().detach().numpy()
 
             # process controls
             control_features, control_labels = next(iter(loader_train_controls))
             control_features = control_features.float().to(device)
-            encodings = ae_model.encoder(control_features)
-            encodings = torch.reshape(encodings, (encodings.shape[0], -1))
-            outputs = cl_model(encodings)
+
+            if deep_cl:
+                outputs = cl_model(control_features)
+            else:
+                encodings = ae_model.encoder(control_features)
+                encodings = torch.reshape(encodings, (encodings.shape[0], -1))
+                outputs = cl_model(encodings)
+
             true_positives = (outputs.argmax(-1) == 1).cpu().float().detach().numpy()
 
             val_acc += (true_positives.sum() + true_negatives.sum()) / (len(true_positives) + len(true_negatives))
@@ -438,7 +460,7 @@ def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, dee
     last_rec_loss, last_acc = run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
                                                         ae, ae_optimizer, ae_criterion,
                                                         cl, cl_optimizer, cl_criterion,
-                                                        device, epochs=epochs)
+                                                        device, epochs=epochs, deep_cl=deep_cl)
 
     if deep_cl:
         save_path = save_path.replace('aecl', 'aedcl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
@@ -457,10 +479,10 @@ def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, dee
 if __name__ == "__main__":
 
     # # TRAIN AUTOENCODER ALONE
-    train_autoencoder(60)
+    # train_autoencoder(60)
 
     # # TRAIN CLASSIFIER ALONE
-    train_deep_classifier_alone(60)
+    # train_deep_classifier_alone(60)
 
     # device = torch.device('cuda')
     #
@@ -483,5 +505,5 @@ if __name__ == "__main__":
     # cl = Classifier().to(device)
     # cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
     # cl.eval()
-    #
-    # train_together(60, deep_cl=True)
+
+    train_together(60, deep_cl=True)
