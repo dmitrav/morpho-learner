@@ -11,4 +11,4 @@ from src.trainer import train_deep_classifier_alone
 from src.analysis import plot_drugs_clustering, plot_cell_lines_clustering
 
 if __name__ == "__main__":
-    train_deep_classifier_alone(60)
+    pass

@@ -358,16 +358,16 @@ def train_deep_classifier_alone(epochs, batch_size=256):
 
     device = torch.device('cuda')
 
-    N = 380000  # ~90%
+    Nd, Nc = 380000, 330000  # ~89%
     transform = lambda x: x / 255.
 
     training_drugs = CustomImageDataset(path_to_drugs, 0, transform=transform)
-    training_drugs, the_rest = torch.utils.data.random_split(training_drugs, [N, training_drugs.__len__() - N])
-    validation_drugs, _ = torch.utils.data.random_split(the_rest, [N // 2, the_rest.__len__() - N // 2])
+    training_drugs, the_rest = torch.utils.data.random_split(training_drugs, [Nd, training_drugs.__len__() - Nd])
+    validation_drugs, _ = torch.utils.data.random_split(the_rest, [Nd // 2, the_rest.__len__() - Nd // 2])
 
     training_controls = CustomImageDataset(path_to_controls, 1, transform=transform)
-    training_controls, the_rest = torch.utils.data.random_split(training_controls, [N, training_controls.__len__() - N])
-    validation_controls, _ = torch.utils.data.random_split(the_rest, [N // 2, the_rest.__len__() - N // 2])
+    training_controls, the_rest = torch.utils.data.random_split(training_controls, [Nc, training_controls.__len__() - Nc])
+    validation_controls, _ = torch.utils.data.random_split(the_rest, [Nc // 2, the_rest.__len__() - Nc // 2])
 
     loader_train_drugs = DataLoader(training_drugs, batch_size=batch_size, shuffle=True)
     loader_train_controls = DataLoader(training_controls, batch_size=batch_size, shuffle=True)
@@ -391,7 +391,7 @@ def train_deep_classifier_alone(epochs, batch_size=256):
     torch.save(model.state_dict(), save_path + 'deep_classifier.torch')
 
 
-def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256):
+def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, deep_cl=True):
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
@@ -403,23 +403,28 @@ def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256):
         ae = trained_ae
     else:
         ae = Autoencoder().to(device)
+
     ae_optimizer = optim.Adam(ae.parameters(), lr=0.00015)
     ae_criterion = nn.BCELoss()
 
     if trained_cl is not None:
         cl = trained_cl
     else:
-        cl = Classifier().to(device)
+        if deep_cl:
+            cl = DeepClassifier().to(device)
+        else:
+            cl = Classifier().to(device)
+
     cl_optimizer = optim.Adam(cl.parameters(), lr=0.00045)
     cl_criterion = nn.CrossEntropyLoss()
 
-    N = 380000  # ~90%
+    Nd, Nc = 380000, 330000  # ~89%
 
     training_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)
-    training_drugs, validation_drugs = torch.utils.data.random_split(training_drugs, [N, training_drugs.__len__() - N])
+    training_drugs, validation_drugs = torch.utils.data.random_split(training_drugs, [Nd, training_drugs.__len__() - Nd])
 
     training_controls = CustomImageDataset(path_to_controls, 1, transform=lambda x: x / 255.)
-    training_controls, the_rest = torch.utils.data.random_split(training_controls, [N, training_controls.__len__() - N])
+    training_controls, the_rest = torch.utils.data.random_split(training_controls, [Nc, training_controls.__len__() - Nc])
     validation_controls, _ = torch.utils.data.random_split(the_rest, [len(validation_drugs), the_rest.__len__() - len(validation_drugs)])
 
     print('total drugs:', training_drugs.__len__())
@@ -435,17 +440,27 @@ def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256):
                                                         cl, cl_optimizer, cl_criterion,
                                                         device, epochs=epochs)
 
-    save_path = save_path.replace('aecl', 'aecl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
+    if deep_cl:
+        save_path = save_path.replace('aecl', 'aedcl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
+    else:
+        save_path = save_path.replace('aecl', 'aedcl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
 
     plot_reconstruction(loader_train_drugs, ae, save_to=save_path, n_images=30)
     torch.save(ae.state_dict(), save_path + 'ae.torch')
-    torch.save(cl.state_dict(), save_path + 'cl.torch')
+
+    if deep_cl:
+        torch.save(cl.state_dict(), save_path + 'dcl.torch')
+    else:
+        torch.save(cl.state_dict(), save_path + 'dcl.torch')
 
 
 if __name__ == "__main__":
 
     # # TRAIN AUTOENCODER ALONE
     train_autoencoder(60)
+
+    # # TRAIN CLASSIFIER ALONE
+    train_deep_classifier_alone(60)
 
     # device = torch.device('cuda')
     #
@@ -469,4 +484,4 @@ if __name__ == "__main__":
     # cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
     # cl.eval()
     #
-    # train_together(30, trained_ae=ae, trained_cl=cl)
+    # train_together(60, deep_cl=True)
