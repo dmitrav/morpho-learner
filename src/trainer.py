@@ -298,12 +298,10 @@ def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10)
             pyplot.show()
 
 
-def train_autoencoder(epochs, batch_size=256):
+def train_autoencoder(epochs, trained_ae=None, batch_size=256, device=torch.device('cuda')):
 
     path_to_data = 'D:\ETH\projects\morpho-learner\data\cut\\'
     save_path = 'D:\ETH\projects\morpho-learner\\res\\ae\\'
-
-    device = torch.device('cuda')
 
     N = 380000  # ~90%
     training_data = CustomImageDataset(path_to_data, 0, transform=lambda x: x / 255.)
@@ -312,7 +310,11 @@ def train_autoencoder(epochs, batch_size=256):
     data_loader_train = DataLoader(training_data, batch_size=batch_size, shuffle=True)
     data_loader_test = DataLoader(test_data, batch_size=batch_size, shuffle=True)
 
-    model = Autoencoder().to(device)
+    if trained_ae is not None:
+        model = trained_ae
+    else:
+        model = Autoencoder().to(device)
+
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
     # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[15, 35], gamma=0.5)
     criterion = nn.BCELoss()
@@ -372,13 +374,11 @@ def train_classifier_with_pretrained_encoder(epochs, trained_ae, batch_size=256,
     torch.save(model.state_dict(), save_path + 'classifier.torch')
 
 
-def train_deep_classifier_alone(epochs, batch_size=256):
+def train_deep_classifier_alone(epochs, trained_cl=None, batch_size=256, device=torch.device('cuda')):
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
     save_path = 'D:\ETH\projects\morpho-learner\\res\\dcl\\'
-
-    device = torch.device('cuda')
 
     Nd, Nc = 380000, 330000  # ~89%
     transform = lambda x: x / 255.
@@ -396,7 +396,10 @@ def train_deep_classifier_alone(epochs, batch_size=256):
     loader_val_drugs = DataLoader(validation_drugs, batch_size=batch_size, shuffle=True)
     loader_val_controls = DataLoader(validation_controls, batch_size=batch_size, shuffle=True)
 
-    model = DeepClassifier().to(device)
+    if trained_cl is not None:
+        model = trained_cl
+    else:
+        model = DeepClassifier().to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
     # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 50, 80], gamma=0.3)
@@ -413,13 +416,11 @@ def train_deep_classifier_alone(epochs, batch_size=256):
     torch.save(model.state_dict(), save_path + 'deep_classifier.torch')
 
 
-def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, deep_cl=True):
+def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, deep_cl=True, device=torch.device('cuda')):
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
     save_path = 'D:\ETH\projects\morpho-learner\\res\\aecl\\'
-
-    device = torch.device('cuda')
 
     if trained_ae is not None:
         ae = trained_ae
@@ -478,32 +479,53 @@ def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, dee
 
 if __name__ == "__main__":
 
-    # # TRAIN AUTOENCODER ALONE
-    # train_autoencoder(60)
+    train_ae_alone = True
+    train_cl_alone = True
+    train_both_simultaneously = True
+    train_cl_alone_with_pretrained_ae = False
 
-    # # TRAIN CLASSIFIER ALONE
-    # train_deep_classifier_alone(60)
+    device = torch.device('cuda')
 
-    # device = torch.device('cuda')
-    #
-    # # TRAIN CLASSIFIER WITH PRETRAINED AUTOENCODER
-    # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_0.6673\\'
-    # # load trained autoencoder to use it in the transform
-    # ae = Autoencoder().to(device)
-    # ae.load_state_dict(torch.load(path_to_ae_model+'autoencoder.torch', map_location=device))
-    # ae.eval()
-    #
-    # train_classifier(100, ae)
+    if train_ae_alone:
+        # load model and continue training
+        path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\ae_0.6673\\autoencoder.torch"
+        ae = Autoencoder().to(device)
+        ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
+        ae.eval()
 
-    # # TRAIN TOGETHER
-    # path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\aecl_0.6674_0.7862_e70\\ae.torch"
-    # ae = Autoencoder().to(device)
-    # ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
-    # ae.eval()
-    #
-    # path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\aecl_0.6674_0.7862_e70\cl.torch"
-    # cl = Classifier().to(device)
-    # cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
-    # cl.eval()
+        train_autoencoder(40, trained_ae=ae, device=device)
 
-    train_together(60, deep_cl=True)
+    if train_cl_alone:
+        # load model and continue training
+        path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\dcl_0.7159\\deep_classifier.torch"
+        cl = Classifier().to(device)
+        cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
+        cl.eval()
+
+        train_deep_classifier_alone(40, trained_cl=cl, device=device)
+
+    if train_both_simultaneously:
+
+        path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\aedcl_0.6671_0.7404\\ae.torch"
+        ae = Autoencoder().to(device)
+        ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
+        ae.eval()
+
+        path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\aedcl_0.6671_0.7404\\dcl.torch"
+        cl = Classifier().to(device)
+        cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
+        cl.eval()
+
+        train_together(40, trained_ae=ae, trained_cl=cl, deep_cl=True, device=device)
+
+    if train_cl_alone_with_pretrained_ae:
+        """ classification based on the reduced dimensions, obtained by pretrained autoencoder
+            not directly comparable to autoencoder and advesarial approaches -> probably redundant """
+
+        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_0.6673\\'
+        # load trained autoencoder to use it in the transform
+        ae = Autoencoder().to(device)
+        ae.load_state_dict(torch.load(path_to_ae_model+'autoencoder.torch', map_location=device))
+        ae.eval()
+
+        train_classifier_with_pretrained_encoder(100, ae)
