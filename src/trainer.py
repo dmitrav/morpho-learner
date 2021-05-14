@@ -166,16 +166,10 @@ def run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_
             # get features of drugs
             batch_features = batch_features.float().to(device)
 
-            if deep_cl:
-                # encoder is already "built-in"
-                outputs = cl_model(batch_features)
-            else:
-                # retrieve encodings
-                encodings = ae_model.encoder(batch_features)
-                # reshape fo classifier input
-                encodings = torch.reshape(encodings, (encodings.shape[0], -1))
-                # run through classifier
-                outputs = cl_model(encodings)
+            # retrieve encodings
+            encodings = ae_model.encoder(batch_features)
+            # run through classifier
+            outputs = cl_model(encodings)
 
             # calculate loss on drugs
             cl_loss = cl_criterion(outputs, batch_labels.to(device))
@@ -185,16 +179,10 @@ def run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_
             control_features, control_labels = next(iter(loader_train_controls))
             control_features = control_features.float().to(device)
 
-            if deep_cl:
-                # encoder is already "built-in"
-                outputs = cl_model(control_features)
-            else:
-                # retrieve encodings
-                encodings = ae_model.encoder(control_features)
-                # reshape fo classifier input
-                encodings = torch.reshape(encodings, (encodings.shape[0], -1))
-                # run through classifier
-                outputs = cl_model(encodings)
+            # retrieve encodings
+            encodings = ae_model.encoder(control_features)
+            # run through classifier
+            outputs = cl_model(encodings)
 
             true_positives = (outputs.argmax(-1) == 1).cpu().float().detach().numpy()
             # add loss on controls
@@ -240,26 +228,16 @@ def run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_
             # process drugs
             batch_features = batch_features.float().to(device)
 
-            if deep_cl:
-                outputs = cl_model(batch_features)
-            else:
-                encodings = ae_model.encoder(batch_features)
-                encodings = torch.reshape(encodings, (encodings.shape[0], -1))
-                outputs = cl_model(encodings)
-
+            encodings = ae_model.encoder(batch_features)
+            outputs = cl_model(encodings)
             true_negatives = (outputs.argmax(-1) == 0).cpu().float().detach().numpy()
 
             # process controls
             control_features, control_labels = next(iter(loader_train_controls))
             control_features = control_features.float().to(device)
 
-            if deep_cl:
-                outputs = cl_model(control_features)
-            else:
-                encodings = ae_model.encoder(control_features)
-                encodings = torch.reshape(encodings, (encodings.shape[0], -1))
-                outputs = cl_model(encodings)
-
+            encodings = ae_model.encoder(control_features)
+            outputs = cl_model(encodings)
             true_positives = (outputs.argmax(-1) == 1).cpu().float().detach().numpy()
 
             val_acc += (true_positives.sum() + true_negatives.sum()) / (len(true_positives) + len(true_negatives))
@@ -296,6 +274,7 @@ def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10)
             pyplot.savefig(save_to + 'recs/{}.pdf'.format(i))
         else:
             pyplot.show()
+    pyplot.close('all')
 
 
 def train_autoencoder(epochs, trained_ae=None, batch_size=256, device=torch.device('cuda')):
@@ -416,7 +395,7 @@ def train_deep_classifier_alone(epochs, trained_cl=None, batch_size=256, device=
     torch.save(model.state_dict(), save_path + 'deep_classifier.torch')
 
 
-def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, deep_cl=True, device=torch.device('cuda')):
+def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, device=torch.device('cuda')):
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
@@ -433,10 +412,7 @@ def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, dee
     if trained_cl is not None:
         cl = trained_cl
     else:
-        if deep_cl:
-            cl = DeepClassifier().to(device)
-        else:
-            cl = Classifier().to(device)
+        cl = Classifier().to(device)
 
     cl_optimizer = optim.Adam(cl.parameters(), lr=0.00045)
     cl_criterion = nn.CrossEntropyLoss()
@@ -461,26 +437,19 @@ def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, dee
     last_rec_loss, last_acc = run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
                                                         ae, ae_optimizer, ae_criterion,
                                                         cl, cl_optimizer, cl_criterion,
-                                                        device, epochs=epochs, deep_cl=deep_cl)
+                                                        device, epochs=epochs)
 
-    if deep_cl:
-        save_path = save_path.replace('aecl', 'aedcl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
-    else:
-        save_path = save_path.replace('aecl', 'aedcl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
+    save_path = save_path.replace('aecl', 'aecl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
 
     plot_reconstruction(loader_train_drugs, ae, save_to=save_path, n_images=30)
     torch.save(ae.state_dict(), save_path + 'ae.torch')
-
-    if deep_cl:
-        torch.save(cl.state_dict(), save_path + 'dcl.torch')
-    else:
-        torch.save(cl.state_dict(), save_path + 'dcl.torch')
+    torch.save(cl.state_dict(), save_path + 'cl.torch')
 
 
 if __name__ == "__main__":
 
-    train_ae_alone = True
-    train_cl_alone = True
+    train_ae_alone = False
+    train_cl_alone = False
     train_both_simultaneously = True
     train_cl_alone_with_pretrained_ae = False
 
@@ -488,7 +457,7 @@ if __name__ == "__main__":
 
     if train_ae_alone:
         # load model and continue training
-        path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\ae_0.6673\\autoencoder.torch"
+        path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\ae_at_60_0.6673\\autoencoder.torch"
         ae = Autoencoder().to(device)
         ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
         ae.eval()
@@ -497,7 +466,7 @@ if __name__ == "__main__":
 
     if train_cl_alone:
         # load model and continue training
-        path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\dcl_0.7159\\deep_classifier.torch"
+        path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\dcl_at_60_0.7159\\deep_classifier.torch"
         cl = Classifier().to(device)
         cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
         cl.eval()
@@ -506,17 +475,17 @@ if __name__ == "__main__":
 
     if train_both_simultaneously:
 
-        path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\aedcl_0.6671_0.7404\\ae.torch"
-        ae = Autoencoder().to(device)
-        ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
-        ae.eval()
+        # path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\aedcl_0.6671_0.7404\\ae.torch"
+        # ae = Autoencoder().to(device)
+        # ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
+        # ae.eval()
+        #
+        # path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\aedcl_0.6671_0.7404\\dcl.torch"
+        # cl = Classifier().to(device)
+        # cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
+        # cl.eval()
 
-        path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\aedcl_0.6671_0.7404\\dcl.torch"
-        cl = Classifier().to(device)
-        cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
-        cl.eval()
-
-        train_together(40, trained_ae=ae, trained_cl=cl, deep_cl=True, device=device)
+        train_together(60, device=device)
 
     if train_cl_alone_with_pretrained_ae:
         """ classification based on the reduced dimensions, obtained by pretrained autoencoder

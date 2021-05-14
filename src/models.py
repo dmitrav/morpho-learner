@@ -57,10 +57,10 @@ class Classifier(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
 
+        # plugs in after convolutional autoencoder -> needs flattening of the filters
         self.model = nn.Sequential(
-            nn.Linear(2048, 256),
-            nn.LeakyReLU(),
-            nn.Linear(256, 2),
+            nn.Flatten(),
+            nn.Linear(2048, 2),
             nn.Softmax(dim=1)
         )
 
