@@ -60,7 +60,9 @@ class Classifier(nn.Module):
         # plugs in after convolutional autoencoder -> needs flattening of the filters
         self.model = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(2048, 2),
+            nn.Linear(2048, 256),
+            nn.LeakyReLU(),
+            nn.Linear(256, 2),
             nn.Softmax(dim=1)
         )
 
@@ -93,7 +95,9 @@ class DeepClassifier(nn.Module):
             nn.Conv2d(16, 8, (3, 3), stride=(1, 1), padding=(1, 1)),
 
             nn.Flatten(),
-            nn.Linear(2048, 2),
+            nn.Linear(2048, 256),
+            nn.LeakyReLU(True),
+            nn.Linear(256, 2),
             nn.Softmax(dim=1)
         )
 

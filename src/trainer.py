@@ -380,7 +380,7 @@ def train_deep_classifier_alone(epochs, trained_cl=None, batch_size=256, device=
     else:
         model = DeepClassifier().to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    optimizer = optim.Adam(model.parameters(), lr=0.00045)
     # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 50, 80], gamma=0.3)
     criterion = nn.CrossEntropyLoss()
 
@@ -449,7 +449,7 @@ def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, dev
 if __name__ == "__main__":
 
     train_ae_alone = False
-    train_cl_alone = False
+    train_cl_alone = True
     train_both_simultaneously = True
     train_cl_alone_with_pretrained_ae = False
 
@@ -465,27 +465,27 @@ if __name__ == "__main__":
         train_autoencoder(40, trained_ae=ae, device=device)
 
     if train_cl_alone:
-        # load model and continue training
-        path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\dcl_at_60_0.7159\\deep_classifier.torch"
+        # # load model and continue training
+        # path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\dcl_at_60_0.7159\\deep_classifier.torch"
+        # cl = DeepClassifier().to(device)
+        # cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
+        # cl.eval()
+
+        train_deep_classifier_alone(60, device=device)
+
+    if train_both_simultaneously:
+
+        path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\aecl_at_60_0.6672_0.7217\\ae.torch"
+        ae = Autoencoder().to(device)
+        ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
+        ae.eval()
+
+        path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\aecl_at_60_0.6672_0.7217\\dcl.torch"
         cl = Classifier().to(device)
         cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
         cl.eval()
 
-        train_deep_classifier_alone(40, trained_cl=cl, device=device)
-
-    if train_both_simultaneously:
-
-        # path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\aedcl_0.6671_0.7404\\ae.torch"
-        # ae = Autoencoder().to(device)
-        # ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
-        # ae.eval()
-        #
-        # path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\aedcl_0.6671_0.7404\\dcl.torch"
-        # cl = Classifier().to(device)
-        # cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
-        # cl.eval()
-
-        train_together(60, device=device)
+        train_together(40, device=device)
 
     if train_cl_alone_with_pretrained_ae:
         """ classification based on the reduced dimensions, obtained by pretrained autoencoder
