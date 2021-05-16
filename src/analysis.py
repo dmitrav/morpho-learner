@@ -59,9 +59,7 @@ def plot_full_data_umaps(path_to_drugs, save_path, transform):
     encodings = numpy.array(encodings)
 
     umap_labels = {'cell_line': cell_lines, 'drug': drugs}
-    umap_pars = [(10, 'euclidean'), (25, 'euclidean'), (50, 'euclidean'), (100, 'euclidean'), (500, 'euclidean'),
-                 (10, 'cosine'), (25, 'cosine'), (50, 'cosine'), (100, 'cosine'), (500, 'cosine'),
-                 (10, 'correlation'), (25, 'correlation'), (50, 'correlation'), (100, 'correlation'), (500, 'correlation')]
+    umap_pars = [(25, 'euclidean'), (25, 'cosine'),  (25, 'correlation')]
 
     plot_umap_with_pars_and_labels(encodings, umap_pars, umap_labels, save_path)
 
@@ -84,9 +82,7 @@ def plot_cell_lines_umaps(path_to_drugs, save_path, transform):
         encodings = numpy.array(encodings)
 
         umap_labels = {'drug': drugs}
-        umap_pars = [(10, 'euclidean'), (25, 'euclidean'), (50, 'euclidean'), (100, 'euclidean'), (500, 'euclidean'),
-                     (10, 'cosine'), (25, 'cosine'), (50, 'cosine'), (100, 'cosine'), (500, 'cosine'),
-                     (10, 'correlation'), (25, 'correlation'), (50, 'correlation'), (100, 'correlation'), (500, 'correlation')]
+        umap_pars = [(25, 'euclidean'), (25, 'cosine'), (25, 'correlation')]
 
         plot_umap_with_pars_and_labels(encodings, umap_pars, umap_labels, save_path, umap_title=cell_line)
 
@@ -109,9 +105,7 @@ def plot_drugs_umaps(path_to_drugs, save_path, transform):
         encodings = numpy.array(encodings)
 
         umap_labels = {'cell_line': cell_lines}
-        umap_pars = [(10, 'euclidean'), (25, 'euclidean'), (50, 'euclidean'), (100, 'euclidean'), (500, 'euclidean'),
-                     (10, 'cosine'), (25, 'cosine'), (50, 'cosine'), (100, 'cosine'), (500, 'cosine'),
-                     (10, 'correlation'), (25, 'correlation'), (50, 'correlation'), (100, 'correlation'), (500, 'correlation')]
+        umap_pars = [(25, 'euclidean'), (25, 'cosine'), (25, 'correlation')]
 
         plot_umap_with_pars_and_labels(encodings, umap_pars, umap_labels, save_path, umap_title=drug)
 
@@ -199,7 +193,7 @@ def calculate_cluster_enrichments(cluster_counts):
     return cluster_enrichments
 
 
-def save_cluster_members(path_to_drug_images, image_files, image_clusters, image_grouping_factor, save_to, n=50,  path_to_control_images=None):
+def save_cluster_members(path_to_drug_images, image_files, image_clusters, image_grouping_factor, save_to, n=None,  path_to_control_images=None):
 
     unique_clusters = sorted(list(set(image_clusters)))
 
@@ -208,7 +202,8 @@ def save_cluster_members(path_to_drug_images, image_files, image_clusters, image
             os.makedirs(save_to + image_grouping_factor + '\\{}'.format(cluster))
 
         images_to_save = [f for f in image_files if image_clusters[image_files.index(f)] == cluster]
-        images_to_save = random.sample(images_to_save, min(n, len(images_to_save)))
+        if n is not None:
+            images_to_save = random.sample(images_to_save, min(n, len(images_to_save)))
 
         # copy n representatives of cluster
         for image in images_to_save:
@@ -315,28 +310,28 @@ if __name__ == "__main__":
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
-    path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_0.6672_0.8192_e100\\'
+    path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
 
     device = torch.device('cuda')
 
     # load trained autoencoder to use it in the transform
     ae = Autoencoder().to(device)
-    ae.load_state_dict(torch.load(path_to_ae_model + 'ae.torch', map_location=device))
+    ae.load_state_dict(torch.load(path_to_ae_model + 'autoencoder.torch', map_location=device))
     ae.eval()
 
     transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
-    # save_path = path_to_ae_model + 'full_data_umaps\\'
-    # plot_full_data_umaps(path_to_drugs, save_path, transform)
+    save_path = path_to_ae_model + 'full_data_umaps\\'
+    plot_full_data_umaps(path_to_drugs, save_path, transform)
 
-    # save_path = path_to_ae_model + 'cell_lines_umaps\\'
-    # plot_cell_lines_umaps(path_to_drugs, save_path, transform)
+    save_path = path_to_ae_model + 'cell_lines_umaps\\'
+    plot_cell_lines_umaps(path_to_drugs, save_path, transform)
 
-    # save_path = path_to_ae_model + 'drugs_umaps\\'
-    # plot_drugs_umaps(path_to_drugs, save_path, transform)
+    save_path = path_to_ae_model + 'drugs_umaps\\'
+    plot_drugs_umaps(path_to_drugs, save_path, transform)
 
-    # save_path = path_to_ae_model + 'drugs_clustering_mcs=10_ms=1\\'
-    # plot_drugs_clustering(path_to_drugs, save_path, transform, min_cluster_size=10, min_samples=1)
+    save_path = path_to_ae_model + 'drugs_clustering_mcs=20_ms=1\\'
+    plot_drugs_clustering(path_to_drugs, save_path, transform, min_cluster_size=20, min_samples=1)
 
-    save_path = path_to_ae_model + 'cell_lines_clustering_mcs=10_ms=1\\'
-    plot_cell_lines_clustering(path_to_drugs, path_to_controls, save_path, transform, min_cluster_size=10, min_samples=1)
+    save_path = path_to_ae_model + 'cell_lines_clustering_mcs=30_ms=1\\'
+    plot_cell_lines_clustering(path_to_drugs, path_to_controls, save_path, transform, min_cluster_size=30, min_samples=1)
