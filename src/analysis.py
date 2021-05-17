@@ -8,8 +8,9 @@ from tqdm import tqdm
 from hdbscan import HDBSCAN
 from statsmodels.stats.multitest import multipletests
 from scipy.stats import ks_2samp, mannwhitneyu, kruskal, fisher_exact
+from torch.nn import Sequential
 
-from src.models import Autoencoder
+from src.models import Autoencoder, DeepClassifier
 from src.constants import cell_lines as all_cell_lines
 from src.constants import drugs as all_drugs
 from src.constants import get_type_by_name
@@ -312,29 +313,38 @@ if __name__ == "__main__":
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
 
     # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
-    path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
+    # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
+    path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\dcl_at_100_0.7424\\'
 
     device = torch.device('cuda')
 
-    # load trained autoencoder to use it in the transform
-    ae = Autoencoder().to(device)
+    # # load a trained autoencoder to use it in the transform
+    # ae = Autoencoder().to(device)
     # ae.load_state_dict(torch.load(path_to_ae_model + 'autoencoder.torch', map_location=device))
-    ae.load_state_dict(torch.load(path_to_ae_model + 'ae.torch', map_location=device))
-    ae.eval()
+    # ae.load_state_dict(torch.load(path_to_ae_model + 'ae.torch', map_location=device))
+    # ae.eval()
+    # # create a transform function with autoencoder
+    # transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
-    transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+    # # load a trained deep classifier to use it in the transform
+    cl = DeepClassifier().to(device)
+    cl.load_state_dict(torch.load(path_to_cl_model + 'deep_classifier.torch', map_location=device))
+    cl.eval()
+    cl = Sequential(*list(cl.model.children())[:-4])
 
-    save_path = path_to_ae_model + 'full_data_umaps\\'
+    transform = lambda x: cl(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+
+    save_path = path_to_cl_model + 'full_data_umaps\\'
     plot_full_data_umaps(path_to_drugs, save_path, transform)
 
-    save_path = path_to_ae_model + 'cell_lines_umaps\\'
+    save_path = path_to_cl_model + 'cell_lines_umaps\\'
     plot_cell_lines_umaps(path_to_drugs, save_path, transform)
 
-    save_path = path_to_ae_model + 'drugs_umaps\\'
+    save_path = path_to_cl_model + 'drugs_umaps\\'
     plot_drugs_umaps(path_to_drugs, save_path, transform)
 
-    save_path = path_to_ae_model + 'drugs_clustering_mcs=20_ms=1\\'
+    save_path = path_to_cl_model + 'drugs_clustering_mcs=20_ms=1\\'
     plot_drugs_clustering(path_to_drugs, save_path, transform, min_cluster_size=20, min_samples=1)
 
-    save_path = path_to_ae_model + 'cell_lines_clustering_mcs=30_ms=1\\'
+    save_path = path_to_cl_model + 'cell_lines_clustering_mcs=30_ms=1\\'
     plot_cell_lines_clustering(path_to_drugs, path_to_controls, save_path, transform, min_cluster_size=30, min_samples=1)
