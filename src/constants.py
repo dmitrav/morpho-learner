@@ -1,5 +1,5 @@
 
-version = "v.0.1.10-cuda"
+version = "v.0.1.11-cuda"
 
 
 def get_type_by_name(name):

@@ -61,7 +61,7 @@ def plot_full_data_umaps(path_to_drugs, save_path, transform):
     umap_labels = {'cell_line': cell_lines, 'drug': drugs}
     umap_pars = [(25, 'euclidean'), (25, 'cosine'),  (25, 'correlation')]
 
-    plot_umap_with_pars_and_labels(encodings, umap_pars, umap_labels, save_path)
+    plot_umap_with_pars_and_labels(encodings, umap_pars, umap_labels, save_path, umap_title='full')
 
 
 def plot_cell_lines_umaps(path_to_drugs, save_path, transform):
@@ -75,7 +75,7 @@ def plot_cell_lines_umaps(path_to_drugs, save_path, transform):
         dates = ['_'.join(f.split('_')[-3:]) for f in image_paths]
 
         encodings = []
-        for path in tqdm(image_paths):
+        for path in image_paths:
             img = read_image(path_to_drugs + path)
             img_encoded = transform(img)
             encodings.append(img_encoded.detach().cpu().numpy())
@@ -98,7 +98,7 @@ def plot_drugs_umaps(path_to_drugs, save_path, transform):
         dates = ['_'.join(f.split('_')[-3:]) for f in image_paths]
 
         encodings = []
-        for path in tqdm(image_paths):
+        for path in image_paths:
             img = read_image(path_to_drugs + path)
             img_encoded = transform(img)
             encodings.append(img_encoded.detach().cpu().numpy())
@@ -310,13 +310,16 @@ if __name__ == "__main__":
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
-    path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
+
+    # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
+    path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
 
     device = torch.device('cuda')
 
     # load trained autoencoder to use it in the transform
     ae = Autoencoder().to(device)
-    ae.load_state_dict(torch.load(path_to_ae_model + 'autoencoder.torch', map_location=device))
+    # ae.load_state_dict(torch.load(path_to_ae_model + 'autoencoder.torch', map_location=device))
+    ae.load_state_dict(torch.load(path_to_ae_model + 'ae.torch', map_location=device))
     ae.eval()
 
     transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
