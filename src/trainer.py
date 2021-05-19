@@ -4,6 +4,7 @@ from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
 from torchvision.io import read_image
 import torch.multiprocessing as mp
+from PIL import Image
 
 from src.models import Autoencoder, Classifier, DeepClassifier
 
@@ -23,6 +24,36 @@ class CustomImageDataset(Dataset):
         img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
         image = read_image(img_path)
         label = self.img_labels.iloc[idx, 1]
+        if self.transform:
+            image = self.transform(image)
+        if self.target_transform:
+            label = self.target_transform(label)
+        sample = (image, label)
+        return sample
+
+
+class JointImageDataset(Dataset):
+    def __init__(self, datasets, transform=None, target_transform=None):
+
+        for subset in datasets:
+            subset.dataset.img_labels.insert(0, 'path', subset.dataset.img_dir)
+
+        self.img_labels = pandas.concat([subset.dataset.img_labels for subset in datasets])
+        self.transform = transform
+        self.target_transform = target_transform
+
+    def __len__(self):
+        return len(self.img_labels)
+
+    def __getitem__(self, idx):
+        img_path = os.path.join(self.img_labels.iloc[idx, 0], self.img_labels.iloc[idx, 1])
+
+        # read 3 channels
+        image = numpy.array(Image.open(img_path).convert('RGB'))
+        image = numpy.moveaxis(image, -1, 0)  # set channels as the first dim
+        image = torch.Tensor(image)
+
+        label = self.img_labels.iloc[idx, 2]
         if self.transform:
             image = self.transform(image)
         if self.target_transform:
