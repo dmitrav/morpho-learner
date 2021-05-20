@@ -53,6 +53,9 @@ class JointImageDataset(Dataset):
         image = numpy.moveaxis(image, -1, 0)  # set channels as the first dim
         image = torch.Tensor(image)
 
+        # # read 1 channel
+        # image = read_image(img_path)
+
         label = self.img_labels.iloc[idx, 2]
         if self.transform:
             image = self.transform(image)
