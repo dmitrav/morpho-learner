@@ -117,8 +117,8 @@ if __name__ == "__main__":
                 # save network
                 torch.save(model.state_dict(), save_path + id + '\\ViT_at_{}.torch'.format(epoch))
 
-                if i > 2:
-                    if epoch_loss > loss_history[i-1] and epoch_loss > loss_history[i-2]:
+                if epoch > 2:
+                    if epoch_loss > loss_history[epoch-1] and epoch_loss > loss_history[epoch-2]:
                         # if loss grows, stop training
                         break
 
