@@ -70,8 +70,8 @@ if __name__ == "__main__":
 
     grid_size = 100
     batch_size = 512
-    N = 30000
-    epochs = 3
+    N = 300000
+    epochs = 10
 
     grid = generate_grid(grid_size, random_dino=False)
 
@@ -117,6 +117,11 @@ if __name__ == "__main__":
                 # save network
                 torch.save(model.state_dict(), save_path + id + '\\ViT_at_{}.torch'.format(epoch))
 
+                if i > 2:
+                    if epoch_loss > loss_history[i-1] and epoch_loss > loss_history[i-2]:
+                        # if loss grows, stop training
+                        break
+
             print('{}/{} completed\n'.format(i, grid_size))
             # save history
             history = pandas.DataFrame({'epoch': [x for x in range(1, epochs+1)], 'loss': loss_history})
@@ -127,7 +132,7 @@ if __name__ == "__main__":
             pyplot.close()
 
         except Exception as e:
-            print('{}/{} failed with {}\n'.format(i, grid_size, e))
+            print('{}/{} failed with {}\n'.format(i+1, grid_size, e))
 
         # save vit parameters
         pandas.DataFrame(grid['vit'][i], index=['pars']).T\
