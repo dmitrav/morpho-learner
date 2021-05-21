@@ -62,24 +62,24 @@ def generate_grid(grid_size, random_dino=False):
     return grid
 
 
-def save_history_and_parameters(i, grid, loss_history, save_path):
+def save_history_and_parameters(loss_history, vit_pars, dino_pars, save_path):
 
     # save history
     history = pandas.DataFrame({'epoch': [x+1 for x in range(len(loss_history))], 'loss': loss_history})
-    history.to_csv(save_path + id + '\\history.csv', index=False)
+    history.to_csv(save_path + '\\history.csv', index=False)
 
     # plot history
     seaborn.lineplot(data=history, x='epoch', y='loss')
-    pyplot.savefig(save_path + id + '\\loss.png')
+    pyplot.savefig(save_path + '\\loss.png')
     pyplot.close()
 
     # save vit parameters
-    pandas.DataFrame(grid['vit'][i], index=['pars']).T \
-        .to_csv(save_path + id + '\\vit_pars.csv', index=False)
+    pandas.DataFrame(vit_pars, index=['values'], columns=vit_pars.keys()).T \
+        .to_csv(save_path + '\\vit_pars.csv', index=False)
 
     # save dino parameters
-    pandas.DataFrame(grid['dino'][i], index=['pars']).T \
-        .to_csv(save_path + id + '\\dino_pars.csv', index=False)
+    pandas.DataFrame(dino_pars, index=['pars'], columns=dino_pars.keys()).T \
+        .to_csv(save_path + '\\dino_pars.csv', index=False)
 
     print('history and parameters saved')
 
@@ -145,7 +145,7 @@ if __name__ == "__main__":
                         break
 
             print('{}/{} completed\n'.format(i+1, grid_size))
-            save_history_and_parameters(i, grid, loss_history, save_path + id)
+            save_history_and_parameters(loss_history, grid['vit'][i], grid['dino'][i], save_path + id)
 
         except Exception as e:
             print('{}/{} failed with {}\n'.format(i+1, grid_size, e))
