@@ -1,5 +1,5 @@
 
-import os, pandas, time, torch, numpy, uuid, seaborn, random
+import os, pandas, time, torch, numpy, uuid, seaborn, random, shutil
 from matplotlib import pyplot
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
@@ -62,6 +62,28 @@ def generate_grid(grid_size, random_dino=False):
     return grid
 
 
+def save_history_and_parameters(grid, loss_history, save_path):
+
+    # save history
+    history = pandas.DataFrame({'epoch': [x for x in range(1, i + 2)], 'loss': loss_history})
+    history.to_csv(save_path + id + '\\history.csv', index=False)
+
+    # plot history
+    seaborn.lineplot(data=history, x='epoch', y='loss')
+    pyplot.savefig(save_path + id + '\\loss.png')
+    pyplot.close()
+
+    # save vit parameters
+    pandas.DataFrame(grid['vit'][i], index=['pars']).T \
+        .to_csv(save_path + id + '\\vit_pars.csv', index=False)
+
+    # save dino parameters
+    pandas.DataFrame(grid['dino'][i], index=['pars']).T \
+        .to_csv(save_path + id + '\\dino_pars.csv', index=False)
+
+    print('history and parameters saved')
+
+
 if __name__ == "__main__":
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
@@ -112,33 +134,22 @@ if __name__ == "__main__":
 
                 epoch_loss = epoch_loss / len(data_loader)
                 loss_history.append(epoch_loss)
-                print("epoch {}: {} min, loss = {:.4f}".format(epoch + 1, int((time.time() - start) / 60), epoch_loss))
+                print("epoch {}: {} min, loss = {:.4f}".format(epoch+1, int((time.time() - start) / 60), epoch_loss))
 
                 # save network
                 torch.save(model.state_dict(), save_path + id + '\\ViT_at_{}.torch'.format(epoch))
 
-                if epoch > 2:
-                    if epoch_loss > loss_history[epoch-1] and epoch_loss > loss_history[epoch-2]:
+                if epoch >= 2:
+                    if epoch_loss > loss_history[epoch-1] > loss_history[epoch-2]:
                         # if loss grows, stop training
                         break
 
-            print('{}/{} completed\n'.format(i, grid_size))
-            # save history
-            history = pandas.DataFrame({'epoch': [x for x in range(1, epochs+1)], 'loss': loss_history})
-            history.to_csv(save_path + id + '\\history.csv', index=False)
-            # plot history
-            seaborn.lineplot(data=history, x='epoch', y='loss')
-            pyplot.savefig(save_path + id + '\\loss.png')
-            pyplot.close()
+            print('{}/{} completed\n'.format(i+1, grid_size))
+            save_history_and_parameters(grid, loss_history, save_path + id)
 
         except Exception as e:
             print('{}/{} failed with {}\n'.format(i+1, grid_size, e))
+            shutil.rmtree(save_path + id)
 
-        # save vit parameters
-        pandas.DataFrame(grid['vit'][i], index=['pars']).T\
-            .to_csv(save_path + id + '\\vit_pars.csv', index=False)
 
-        # save vit parameters
-        pandas.DataFrame(grid['dino'][i], index=['pars']).T\
-            .to_csv(save_path + id + '\\dino_pars.csv', index=False)
 
