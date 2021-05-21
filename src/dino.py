@@ -62,10 +62,10 @@ def generate_grid(grid_size, random_dino=False):
     return grid
 
 
-def save_history_and_parameters(grid, loss_history, save_path):
+def save_history_and_parameters(i, grid, loss_history, save_path):
 
     # save history
-    history = pandas.DataFrame({'epoch': [x for x in range(1, i + 2)], 'loss': loss_history})
+    history = pandas.DataFrame({'epoch': [x+1 for x in range(len(loss_history))], 'loss': loss_history})
     history.to_csv(save_path + id + '\\history.csv', index=False)
 
     # plot history
@@ -145,7 +145,7 @@ if __name__ == "__main__":
                         break
 
             print('{}/{} completed\n'.format(i+1, grid_size))
-            save_history_and_parameters(grid, loss_history, save_path + id)
+            save_history_and_parameters(i, grid, loss_history, save_path + id)
 
         except Exception as e:
             print('{}/{} failed with {}\n'.format(i+1, grid_size, e))
