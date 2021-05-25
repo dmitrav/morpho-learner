@@ -1,5 +1,5 @@
 
-version = "v.0.1.19-cuda"
+version = "v.0.1.20-cuda"
 
 
 def get_type_by_name(name):
@@ -7,6 +7,8 @@ def get_type_by_name(name):
         return 'cell line'
     elif name in drugs:
         return 'drug'
+    elif name in ['DMSO', 'PBS']:
+        return 'control'
     else:
         raise ValueError("Unknown cell line or drug: {}".format(name))
 
@@ -24,5 +26,5 @@ drugs = ['Chlormethine', 'Clofarabine', 'Panzem-2-ME2', 'Pemetrexed', 'Asparagin
          'UK5099', 'Fluorouracil', 'Everolimus', 'MEDICA 16', 'BPTES',
          'Oligomycin A', 'Trametinib', 'Oxaliplatin', 'Rapamycin', 'Etomoxir',
          'Lenvatinib', 'Oxfenicine', 'Mercaptopurine', 'Metformin', 'Omacetaxine',
-         'Cladribine', 'Paclitaxel', 'Methotrexate', 'PBS', 'Topotecan',
+         'Cladribine', 'Paclitaxel', 'Methotrexate', 'Topotecan',
          'YC-1', 'Decitabine']

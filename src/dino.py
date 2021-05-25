@@ -38,13 +38,13 @@ def get_dino_pars(randomize=False):
                     hidden_layer='to_latent',
                     projection_hidden_size=64,  # 256
                     projection_layers=random.sample([1, 2, 3, 4], 1)[0],  # 4
-                    num_classes_K=random.sample([1024, 2048, 4096, 8192, 16334, 65336], 1)[0],  # 65336
-                    student_temp=random.sample([0.5, 0.6, 0.7, 0.8, 0.9], 1)[0],  # 0.9
-                    teacher_temp=random.sample([0.02, 0.04, 0.05, 0.06, 0.07, 0.09], 1)[0],  # 0.04-0.07
-                    local_upper_crop_scale=random.sample([0.2, 0.3, 0.4, 0.5, 0.6], 1)[0],  # 0.4
-                    global_lower_crop_scale=random.sample([0.2, 0.3, 0.4, 0.5, 0.6], 1)[0],  # 0.5
-                    moving_average_decay=random.sample([0.5, 0.6, 0.7, 0.8, 0.9], 1)[0],  # 0.9-0.999
-                    center_moving_average_decay=random.sample([0.5, 0.6, 0.7, 0.8, 0.9], 1)[0])  # 0.9-0.999
+                    num_classes_K=random.sample([4096, 8192, 16334, 65336], 1)[0],  # 65336
+                    student_temp=random.sample([0.7, 0.8, 0.9], 1)[0],  # 0.9
+                    teacher_temp=random.sample([0.02, 0.04, 0.05, 0.07, 0.09], 1)[0],  # 0.04-0.07
+                    local_upper_crop_scale=random.sample([0.3, 0.4, 0.5], 1)[0],  # 0.4
+                    global_lower_crop_scale=random.sample([0.4, 0.5, 0.6], 1)[0],  # 0.5
+                    moving_average_decay=random.sample([0.8, 0.9, 0.99], 1)[0],  # 0.9-0.999
+                    center_moving_average_decay=random.sample([0.8, 0.9, 0.99], 1)[0])  # 0.9-0.999
     else:
         return dict(image_size=64, hidden_layer='to_latent', projection_hidden_size=64, projection_layers=4,
                     num_classes_K=16334, student_temp=0.9, teacher_temp=0.04, local_upper_crop_scale=0.4,
@@ -70,18 +70,19 @@ def save_history_and_parameters(loss_history, vit_pars, dino_pars, save_path):
 
     # plot history
     seaborn.lineplot(data=history, x='epoch', y='loss')
+    pyplot.grid()
     pyplot.savefig(save_path + '\\loss.png')
     pyplot.close()
 
     # save vit parameters
     pandas.DataFrame(vit_pars, index=['values'], columns=vit_pars.keys()).T \
-        .to_csv(save_path + '\\vit_pars.csv', index=False)
+        .to_csv(save_path + '\\vit_pars.csv', index=True)
 
     # save dino parameters
     pandas.DataFrame(dino_pars, index=['pars'], columns=dino_pars.keys()).T \
-        .to_csv(save_path + '\\dino_pars.csv', index=False)
+        .to_csv(save_path + '\\dino_pars.csv', index=True)
 
-    print('history and parameters saved')
+    print('history and parameters saved\n')
 
 
 if __name__ == "__main__":
@@ -95,7 +96,7 @@ if __name__ == "__main__":
     N = 300000
     epochs = 10
 
-    grid = generate_grid(grid_size, random_dino=False)
+    grid = generate_grid(grid_size, random_dino=True)
 
     training_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)
     training_controls = CustomImageDataset(path_to_controls, 1, transform=lambda x: x / 255.)
@@ -113,43 +114,46 @@ if __name__ == "__main__":
             os.makedirs(save_path + id)
 
         model = ViT(**grid['vit'][i]).to(device)
-        learner = Dino(model, **grid['dino'][i]).to(device)
-
-        opt = torch.optim.Adam(learner.parameters(), lr=0.0001)
-
-        loss_history = []
-
         try:
-            for epoch in range(epochs):
-                start = time.time()
-                epoch_loss = 0
-                for batch_features in data_loader:
-                    images = batch_features[0].float().to(device)
-                    loss = learner(images)
-                    epoch_loss += loss.item()
-                    opt.zero_grad()
-                    loss.backward()
-                    opt.step()
-                    learner.update_moving_average()  # update moving average of teacher encoder and teacher centers
+            learner = Dino(model, **grid['dino'][i]).to(device)
+            opt = torch.optim.Adam(learner.parameters(), lr=0.0001)
 
-                epoch_loss = epoch_loss / len(data_loader)
-                loss_history.append(epoch_loss)
-                print("epoch {}: {} min, loss = {:.4f}".format(epoch+1, int((time.time() - start) / 60), epoch_loss))
+            loss_history = []
+            try:
+                for epoch in range(epochs):
+                    start = time.time()
+                    epoch_loss = 0
+                    for batch_features in data_loader:
+                        images = batch_features[0].float().to(device)
+                        loss = learner(images)
+                        epoch_loss += loss.item()
+                        opt.zero_grad()
+                        loss.backward()
+                        opt.step()
+                        learner.update_moving_average()  # update moving average of teacher encoder and teacher centers
 
-                # save network
-                torch.save(model.state_dict(), save_path + id + '\\ViT_at_{}.torch'.format(epoch))
+                    epoch_loss = epoch_loss / len(data_loader)
+                    loss_history.append(epoch_loss)
+                    print("epoch {}: {} min, loss = {:.4f}".format(epoch+1, int((time.time() - start) / 60), epoch_loss))
 
-                if epoch >= 2:
-                    if epoch_loss > loss_history[epoch-1] > loss_history[epoch-2]:
-                        # if loss grows, stop training
-                        break
+                    # save network
+                    torch.save(model.state_dict(), save_path + id + '\\ViT_at_{}.torch'.format(epoch))
 
-            print('{}/{} completed\n'.format(i+1, grid_size))
-            save_history_and_parameters(loss_history, grid['vit'][i], grid['dino'][i], save_path + id)
+                    if epoch >= 2:
+                        if epoch_loss > loss_history[epoch-1] > loss_history[epoch-2] or epoch_loss > loss_history[0]:
+                            # if loss grows, stop training
+                            break
+                        elif round(epoch_loss, 4) == round(loss_history[epoch-1], 4):
+                            # if loss doesn't fall, stop
+                            break
 
+                print('{}/{} completed'.format(i+1, grid_size))
+                save_history_and_parameters(loss_history, grid['vit'][i], grid['dino'][i], save_path + id)
+
+            except Exception as e:
+                print('{}/{} failed with {}\n'.format(i+1, grid_size, e))
+                shutil.rmtree(save_path + id)
         except Exception as e:
-            print('{}/{} failed with {}\n'.format(i+1, grid_size, e))
+            print('{}/{} failed building dino with {}\n'.format(i+1, grid_size, e))
             shutil.rmtree(save_path + id)
-
-
 

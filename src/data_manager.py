@@ -7,9 +7,6 @@ from src.constants import drugs as all_drug_names
 
 class DataManager:
 
-    data_path = '/Users/{}/ETH/projects/morpho-learner/data/HT29_CL1_P1/'
-    meta_path = '/Users/{}/ETH/projects/pheno-ml/data/metadata/'
-
     remote_data_path = '/Volumes/biol_imsb_sauer_1/users/Andrei/pheno-ml/cell_line_images/batch_1/HT29_CL1_P1/'
 
     def __init__(self, data_path=None, meta_path=None):
@@ -125,7 +122,7 @@ class DataManager:
 
                         if drug == 'nan':
                             continue
-                        elif drug == 'DMSO':
+                        elif drug == 'DMSO' or drug == 'PBS':
                             # controls
                             well_files = [file for file in os.listdir(path_to_images)
                                           if file.endswith('.jpg') and file.split('_')[3] == well]
@@ -143,11 +140,73 @@ class DataManager:
 
                         self.process_images_of_single_well(path_to_images, well_files, n_pieces, out_path, well, drug)
 
+    def move_images_and_rename(self, save_to_folder, full_data=False):
+        """ This method moves images to a single folder, renaming them to keep all meta info in a filename. """
+
+        keep_max_conc_only = False
+        control_step = None
+        n_drug_images = None
+
+        if not full_data:
+            keep_max_conc_only = True
+            control_step = None
+            n_drug_images = None
+
+        for b in tqdm(range(1,8)):
+            batch_path = self.data_path + 'batch_{}\\'.format(b)
+            for cl_folder in tqdm(os.listdir(batch_path)):
+
+                if not cl_folder.startswith('.'):
+                    well_drug_map = self.get_well_drug_mapping_for_cell_line(cl_folder, keep_max_conc_only=keep_max_conc_only)
+                    path_to_images = batch_path + cl_folder + '\\'
+
+                    for well in well_drug_map.keys():
+
+                        drug = str(well_drug_map[well][0])
+                        conc = str(well_drug_map[well][1])
+
+                        if drug == 'nan':
+                            continue
+                        elif drug == 'DMSO' or drug == 'PBS':
+                            # controls
+                            well_files = [file for file in os.listdir(path_to_images)
+                                          if file.endswith('.jpg') and file.split('_')[3] == well]
+
+                            well_files = sorted(well_files)
+                            if control_step is not None:
+                                well_files = well_files[::control_step]  # get every nth control image
+
+                        elif drug in all_drug_names:
+                            # drugs
+                            well_files = [file for file in os.listdir(path_to_images)
+                                          if file.endswith('.jpg') and file.split('_')[3] == well]
+
+                            well_files = sorted(well_files)
+                            if n_drug_images is not None:
+                                well_files = well_files[-n_drug_images:]  # get n last drugs images
+                        else:
+                            raise ValueError("Unknown drug: {}".format(drug))
+
+                        # move images
+                        for file in well_files:
+                            new_filename = file.split('_')
+                            new_filename[3] = '{}_c={}'.format(drug, conc)
+                            new_filename = '_'.join(new_filename)
+
+                            # renaming with drug and conc
+                            shutil.copyfile(path_to_images + file,
+                                            save_to_folder + new_filename)
+
 
 if __name__ == "__main__":
 
-    path_to_batches = '/Users/{}/ETH/projects/pheno-ml/data/cropped/'
-    save_to_path = '/Users/{}/ETH/projects/morpho-learner/data/'
+    path_to_batches = 'D:\ETH\projects\morpho-learner\data\cropped\\'
+    path_to_meta = 'D:\ETH\projects\morpho-learner\data\metadata\\'
 
-    dm = DataManager(path_to_batches)
-    dm.cut_images_from_all_batches_and_save(save_to_path, 16)
+    dm = DataManager(path_to_batches, path_to_meta)
+
+    save_to_path = 'D:\ETH\projects\morpho-learner\data\cropped\\full\\'
+    dm.move_images_and_rename(save_to_path, full_data=True)
+
+    save_to_path = 'D:\ETH\projects\morpho-learner\data\cropped\\max_conc\\'
+    dm.move_images_and_rename(save_to_path, full_data=False)
