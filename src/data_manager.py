@@ -190,7 +190,8 @@ class DataManager:
                         # move images
                         for file in well_files:
                             new_filename = file.split('_')
-                            new_filename[3] = '{}_c={}'.format(drug, conc)
+
+                            new_filename[3] = '{}_{}_c={}'.format(new_filename[3], drug, conc)
                             new_filename = '_'.join(new_filename)
 
                             # renaming with drug and conc
@@ -205,8 +206,8 @@ if __name__ == "__main__":
 
     dm = DataManager(path_to_batches, path_to_meta)
 
-    save_to_path = 'D:\ETH\projects\morpho-learner\data\cropped\\full\\'
-    dm.move_images_and_rename(save_to_path, full_data=True)
-
     save_to_path = 'D:\ETH\projects\morpho-learner\data\cropped\\max_conc\\'
     dm.move_images_and_rename(save_to_path, full_data=False)
+
+    save_to_path = 'D:\ETH\projects\morpho-learner\data\cropped\\full\\'
+    dm.move_images_and_rename(save_to_path, full_data=True)
