@@ -15,28 +15,29 @@ from src.trainer import train_deep_classifier_alone
 from src.analysis import plot_drugs_clustering, plot_cell_lines_clustering
 
 
-def get_vit_pars(randomize=True):
+def get_vit_pars(im_size, randomize=True):
 
     if randomize:
-        return dict(image_size=64,  # 256
-                    patch_size=random.sample([4, 8, 16], 1)[0],  # 32
+        return dict(image_size=im_size,  # 256
+                    patch_size=random.sample([4, 8, 16, 32], 1)[0],  # 32
                     num_classes=random.sample([2, 21, 32, 100, 1000], 1)[0],  # 1000
-                    dim=random.sample([64, 128, 256, 512], 1)[0],  # 1024
+                    dim=random.sample([64, 128, 256, 512, 1024], 1)[0],  # 1024
                     depth=random.sample([x for x in range(1, 7)], 1)[0],  # 6
                     heads=random.sample([x for x in range(1, 17)], 1)[0],  # 16
-                    mlp_dim=random.sample([64, 128, 256, 512, 1024], 1)[0],  # 2048
+                    mlp_dim=random.sample([64, 128, 256, 512, 1024, 2048], 1)[0],  # 2048
                     dropout=random.sample([0, 0.1, 0.2, 0.3, 0.4, 0.5], 1)[0],
                     emb_dropout=random.sample([0, 0.1, 0.2, 0.3, 0.4, 0.5], 1)[0])
     else:
-        return dict(image_size=64, patch_size=8, num_classes=2, dim=128, depth=2, heads=3, mlp_dim=256)
+        # return dict(image_size=64, patch_size=8, num_classes=2, dim=128, depth=2, heads=3, mlp_dim=256)
+        return dict(image_size=256, patch_size=32, num_classes=1000, dim=1024, depth=6, heads=16, mlp_dim=2048)
 
 
-def get_dino_pars(randomize=False):
+def get_dino_pars(im_size, randomize=False):
 
     if randomize:
-        return dict(image_size=64,  # 256
+        return dict(image_size=im_size,  # 256
                     hidden_layer='to_latent',
-                    projection_hidden_size=64,  # 256
+                    projection_hidden_size=im_size,  # 256
                     projection_layers=random.sample([1, 2, 3, 4], 1)[0],  # 4
                     num_classes_K=random.sample([4096, 8192, 16334, 65336], 1)[0],  # 65336
                     student_temp=random.sample([0.7, 0.8, 0.9], 1)[0],  # 0.9
@@ -46,18 +47,21 @@ def get_dino_pars(randomize=False):
                     moving_average_decay=random.sample([0.8, 0.9, 0.99], 1)[0],  # 0.9-0.999
                     center_moving_average_decay=random.sample([0.8, 0.9, 0.99], 1)[0])  # 0.9-0.999
     else:
-        return dict(image_size=64, hidden_layer='to_latent', projection_hidden_size=64, projection_layers=4,
-                    num_classes_K=16334, student_temp=0.9, teacher_temp=0.04, local_upper_crop_scale=0.4,
+        # return dict(image_size=64, hidden_layer='to_latent', projection_hidden_size=64, projection_layers=4,
+        #             num_classes_K=16334, student_temp=0.9, teacher_temp=0.04, local_upper_crop_scale=0.4,
+        #             global_lower_crop_scale=0.5, moving_average_decay=0.9, center_moving_average_decay=0.9)
+        return dict(image_size=256, hidden_layer='to_latent', projection_hidden_size=256, projection_layers=4,
+                    num_classes_K=65336, student_temp=0.9, teacher_temp=0.04, local_upper_crop_scale=0.4,
                     global_lower_crop_scale=0.5, moving_average_decay=0.9, center_moving_average_decay=0.9)
 
 
-def generate_grid(grid_size, random_dino=False):
+def generate_grid(grid_size, image_size, random_vit=True, random_dino=False):
 
     grid = {'id': [], 'vit': [], 'dino': []}
     for _ in range(grid_size):
         grid['id'].append(str(uuid.uuid4())[:8])
-        grid['vit'].append(get_vit_pars(randomize=True))
-        grid['dino'].append(get_dino_pars(randomize=random_dino))
+        grid['vit'].append(get_vit_pars(image_size, randomize=random_vit))
+        grid['dino'].append(get_dino_pars(image_size, randomize=random_dino))
 
     return grid
 
@@ -85,18 +89,18 @@ def save_history_and_parameters(loss_history, vit_pars, dino_pars, save_path):
     print('history and parameters saved\n')
 
 
-if __name__ == "__main__":
+def run_training_for_64x64_cuts():
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
     save_path = 'D:\ETH\projects\morpho-learner\\res\\dino\\'
 
-    grid_size = 100
+    grid_size = 1
     batch_size = 512
     N = 300000
     epochs = 10
 
-    grid = generate_grid(grid_size, random_dino=True)
+    grid = generate_grid(grid_size, 64, random_vit=True, random_dino=True)
 
     training_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)
     training_controls = CustomImageDataset(path_to_controls, 1, transform=lambda x: x / 255.)
@@ -105,6 +109,11 @@ if __name__ == "__main__":
 
     joint_data = JointImageDataset([training_drugs, training_controls], transform=lambda x: x / 255.)
     data_loader = DataLoader(joint_data, batch_size=batch_size, shuffle=True)
+
+    train(grid, epochs, data_loader, save_path)
+
+
+def train(grid, epochs, data_loader, save_path):
 
     device = torch.device('cuda')
     for i, id in enumerate(grid['id']):
@@ -134,26 +143,52 @@ if __name__ == "__main__":
 
                     epoch_loss = epoch_loss / len(data_loader)
                     loss_history.append(epoch_loss)
-                    print("epoch {}: {} min, loss = {:.4f}".format(epoch+1, int((time.time() - start) / 60), epoch_loss))
+                    print("epoch {}: {} min, loss = {:.4f}".format(epoch + 1, int((time.time() - start) / 60),
+                                                                   epoch_loss))
 
                     # save network
                     torch.save(model.state_dict(), save_path + id + '\\ViT_at_{}.torch'.format(epoch))
 
                     if epoch >= 2:
-                        if epoch_loss > loss_history[epoch-1] > loss_history[epoch-2] or epoch_loss > loss_history[0]:
+                        if epoch_loss > loss_history[epoch - 1] > loss_history[epoch - 2] or epoch_loss > loss_history[
+                            0]:
                             # if loss grows, stop training
                             break
-                        elif round(epoch_loss, 4) == round(loss_history[epoch-1], 4):
+                        elif round(epoch_loss, 4) == round(loss_history[epoch - 1], 4):
                             # if loss doesn't fall, stop
                             break
 
-                print('{}/{} completed'.format(i+1, grid_size))
+                print('{}/{} completed'.format(i + 1, len(grid['id'])))
                 save_history_and_parameters(loss_history, grid['vit'][i], grid['dino'][i], save_path + id)
 
             except Exception as e:
-                print('{}/{} failed with {}\n'.format(i+1, grid_size, e))
+                print('{}/{} failed with {}\n'.format(i + 1, len(grid['id']), e))
                 shutil.rmtree(save_path + id)
         except Exception as e:
-            print('{}/{} failed building dino with {}\n'.format(i+1, grid_size, e))
+            print('{}/{} failed building dino with {}\n'.format(i + 1, len(grid['id']), e))
             shutil.rmtree(save_path + id)
 
+
+def run_training_for_256x256_crops():
+    """ Always out of memory on NVidia RTX 2060 :( """
+
+    path_to_data = 'D:\ETH\projects\morpho-learner\data\cropped\max_conc\\'
+    save_path = 'D:\ETH\projects\morpho-learner\\res\\dino\\'
+
+    grid_size = 100
+    batch_size = 256
+    N = 270450  # all images from max concentrations
+    epochs = 10
+
+    grid = generate_grid(grid_size, 256, random_vit=True, random_dino=True)  # run default parameters
+
+    training_data = CustomImageDataset(path_to_data, 0, transform=lambda x: x / 255.)
+    training_data, _ = torch.utils.data.random_split(training_data, [N, training_data.__len__() - N])
+    three_channels = JointImageDataset([training_data], transform=lambda x: x / 255.)
+    data_loader = DataLoader(three_channels, batch_size=batch_size, shuffle=True)
+
+    train(grid, epochs, data_loader, save_path)
+
+
+if __name__ == "__main__":
+    pass
