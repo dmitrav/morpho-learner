@@ -89,18 +89,17 @@ def save_history_and_parameters(loss_history, vit_pars, dino_pars, save_path):
     print('history and parameters saved\n')
 
 
-def run_training_for_64x64_cuts():
+def run_training_for_64x64_cuts(epochs, grid=None, save_path='D:\ETH\projects\morpho-learner\\res\\dino\\'):
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
-    save_path = 'D:\ETH\projects\morpho-learner\\res\\dino\\'
 
-    grid_size = 1
     batch_size = 512
     N = 300000
-    epochs = 10
 
-    grid = generate_grid(grid_size, 64, random_vit=True, random_dino=True)
+    if grid is None:
+        grid_size = 1
+        grid = generate_grid(grid_size, 64, random_vit=True, random_dino=True)
 
     training_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)
     training_controls = CustomImageDataset(path_to_controls, 1, transform=lambda x: x / 255.)
@@ -191,4 +190,51 @@ def run_training_for_256x256_crops():
 
 
 if __name__ == "__main__":
-    pass
+
+    grid_size = 10
+
+    grid_13d4753e = {'id': [], 'vit': [], 'dino': []}
+    for _ in range(grid_size):
+        grid_13d4753e['id'].append(str(uuid.uuid4())[:8])
+        grid_13d4753e['vit'].append(
+            dict(image_size=64, patch_size=16, num_classes=100, dim=64,
+                 depth=5, heads=10, mlp_dim=128, dropout=0, emb_dropout=0.2)
+        )
+        grid_13d4753e['dino'].append(
+            dict(image_size=64, hidden_layer='to_latent', projection_hidden_size=64, projection_layers=4,
+                 num_classes_K=4096, student_temp=0.7, teacher_temp=0.09, local_upper_crop_scale=0.3,
+                 global_lower_crop_scale=0.5, moving_average_decay=0.9, center_moving_average_decay=0.99)
+        )
+    save_path = 'D:\ETH\projects\morpho-learner\\res\dino\\grid_13d4753e\\'
+    run_training_for_64x64_cuts(50, grid=grid_13d4753e, save_path=save_path)
+
+    grid_60d3c055 = {'id': [], 'vit': [], 'dino': []}
+    for _ in range(grid_size):
+        grid_60d3c055['id'].append(str(uuid.uuid4())[:8])
+        grid_60d3c055['vit'].append(
+            dict(image_size=64, patch_size=8, num_classes=21, dim=64,
+                 depth=3, heads=7, mlp_dim=64, droupout=0, emb_dropout=0.4)
+        )
+        grid_60d3c055['dino'].append(
+            dict(image_size=64, hidden_layer='to_latent', projection_hidden_size=64, projection_layers=1,
+                 num_classes_K=4096, student_temp=0.7, teacher_temp=0.05, local_upper_crop_scale=0.4,
+                 global_lower_crop_scale=0.6, moving_average_decay=0.99, center_moving_average_decay=0.99)
+        )
+    save_path = 'D:\ETH\projects\morpho-learner\\res\dino\\grid_60d3c055\\'
+    run_training_for_64x64_cuts(50, grid=grid_60d3c055, save_path=save_path)
+
+    grid_bf723384 = {'id': [], 'vit': [], 'dino': []}
+    for _ in range(grid_size):
+        grid_bf723384['id'].append(str(uuid.uuid4())[:8])
+        grid_bf723384['vit'].append(
+            dict(image_size=64, patch_size=8, num_classes=1000, dim=64,
+                 depth=2, heads=1, mlp_dim=256, dropout=0.2, emb_dropout=0.3)
+        )
+        grid_bf723384['dino'].append(
+            dict(image_size=64, hidden_layer='to_latent', projection_hidden_size=64, projection_layers=2,
+                 num_classes_K=8192, student_temp=0.8, teacher_temp=0.07, local_upper_crop_scale=0.5,
+                 global_lower_crop_scale=0.5, moving_average_decay=0.99, center_moving_average_decay=0.99)
+        )
+    save_path = 'D:\ETH\projects\morpho-learner\\res\dino\\grid_bf723384\\'
+    run_training_for_64x64_cuts(50, grid=grid_bf723384, save_path=save_path)
+
