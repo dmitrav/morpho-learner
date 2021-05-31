@@ -1,5 +1,5 @@
 
-version = "v.0.1.23-cuda"
+version = "v.0.1.24-cuda"
 
 
 def get_type_by_name(name):
@@ -28,3 +28,15 @@ drugs = ['Chlormethine', 'Clofarabine', 'Panzem-2-ME2', 'Pemetrexed', 'Asparagin
          'Lenvatinib', 'Oxfenicine', 'Mercaptopurine', 'Metformin', 'Omacetaxine',
          'Cladribine', 'Paclitaxel', 'Methotrexate', 'Topotecan',
          'YC-1', 'Decitabine']
+
+vit_par_types = {
+    'image_size': int,
+    'patch_size': int,
+    'num_classes': int,
+    'dim': int,
+    'depth': int,
+    'heads': int,
+    'mlp_dim': int,
+    'dropout': float,
+    'emb_dropout': float
+}

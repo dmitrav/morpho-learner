@@ -1,15 +1,19 @@
 
 import os, pandas, time, torch, numpy, uuid, seaborn, random, shutil
+from PIL import Image
 from matplotlib import pyplot
+from tqdm import tqdm
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
 from torchvision.io import read_image
 import torch.multiprocessing as mp
 from torch.nn import Sequential
 from vit_pytorch import ViT, Dino
+from vit_pytorch.recorder import Recorder
 
 from src.models import Autoencoder, Classifier, DeepClassifier
 from src.trainer import CustomImageDataset, JointImageDataset
+from src.constants import vit_par_types
 from src.trainer import plot_reconstruction, train_together, train_autoencoder, train_classifier_with_pretrained_encoder
 from src.trainer import train_deep_classifier_alone
 from src.analysis import plot_drugs_clustering, plot_cell_lines_clustering
@@ -95,14 +99,14 @@ def run_training_for_64x64_cuts(epochs, grid=None, save_path='D:\ETH\projects\mo
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
 
     batch_size = 512
-    N = 300000
+    N = 350000
 
     if grid is None:
         grid_size = 1
         grid = generate_grid(grid_size, 64, random_vit=True, random_dino=True)
 
-    training_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)
-    training_controls = CustomImageDataset(path_to_controls, 1, transform=lambda x: x / 255.)
+    training_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)  # ~429000
+    training_controls = CustomImageDataset(path_to_controls, 1, transform=lambda x: x / 255.)  # ~370000
     training_drugs, _ = torch.utils.data.random_split(training_drugs, [N, training_drugs.__len__() - N])
     training_controls, _ = torch.utils.data.random_split(training_controls, [N, training_controls.__len__() - N])
 
@@ -189,7 +193,59 @@ def run_training_for_256x256_crops():
     train(grid, epochs, data_loader, save_path)
 
 
-if __name__ == "__main__":
+def get_image_tensor(path):
+    image = numpy.array(Image.open(path).convert('RGB'))  # 3 channels
+    image = numpy.moveaxis(image, -1, 0)  # set channels as the first dim
+    image = torch.Tensor(image)  # make tensor
+    image = image / 255.  # transform
+    image = torch.unsqueeze(image, 0)  # add batch dim
+
+    return image
+
+
+def plot_attentions(attns):
+    """ This is hardcoded for a particular architecture, so no general use. """
+    fig, axs = pyplot.subplots(7, 3)
+    for i in range(7):
+        for j in range(3):
+            axs[i, j].imshow(attns.numpy()[0][j][i])
+            axs[i, j].set_title('layer {}, head {}'.format(j, i))
+    pyplot.show()
+
+
+def get_classification(model_path, data_path):
+
+    device = torch.device('cuda')
+    vit_pars = pandas.read_csv(model_path + 'vit_pars.csv', index_col=0)
+    # convert default types to int, except dropout ratios
+    vit_pars = vit_pars.T.convert_dtypes(vit_par_types).T
+    vit_pars = dict(vit_pars['values'])
+
+    model = ViT(**vit_pars).to(device)
+    checkpoint = [file for file in os.listdir(model_path) if file.endswith('.torch') and file.startswith('best')][0]
+    model.load_state_dict(torch.load(model_path + checkpoint, map_location=device))
+    model.eval()
+
+    model = Recorder(model)  # to retrieve attentions and predictions
+
+    for file in tqdm(os.listdir(data_path)):
+        if file.endswith('.jpg'):
+
+            image = get_image_tensor(data_path + file)
+            # forward pass now returns predictions and the attention maps
+            preds, attns = model(image.to(device))
+
+            # retrieve predicted class
+            predicted_class = str(int(torch.nn.Softmax(dim=1)(preds).argmax()))
+            predicted_class_folder = model_path + 'clustering\\{}\\'.format(predicted_class)
+            if not os.path.exists(predicted_class_folder):
+                os.makedirs(predicted_class_folder)
+            # copy file to a class folder
+            shutil.copyfile(data_path+file, predicted_class_folder+file)
+
+
+def train_best_models():
+    """ Best models are hardcoded. """
 
     grid_size = 10
 
@@ -213,7 +269,7 @@ if __name__ == "__main__":
         grid_60d3c055['id'].append(str(uuid.uuid4())[:8])
         grid_60d3c055['vit'].append(
             dict(image_size=64, patch_size=8, num_classes=21, dim=64,
-                 depth=3, heads=7, mlp_dim=64, droupout=0, emb_dropout=0.4)
+                 depth=3, heads=7, mlp_dim=64, dropout=0, emb_dropout=0.4)
         )
         grid_60d3c055['dino'].append(
             dict(image_size=64, hidden_layer='to_latent', projection_hidden_size=64, projection_layers=1,
@@ -238,3 +294,11 @@ if __name__ == "__main__":
     save_path = 'D:\ETH\projects\morpho-learner\\res\dino\\grid_bf723384\\'
     run_training_for_64x64_cuts(50, grid=grid_bf723384, save_path=save_path)
 
+
+if __name__ == "__main__":
+
+    for n_classes in [21, 100, 1000]:
+
+        model_path = 'D:\ETH\projects\morpho-learner\\res\dino\\n_classes={}\\'.format(n_classes)
+        data_path = 'D:\ETH\projects\morpho-learner\data\cut\\'
+        get_classification(model_path, data_path)
