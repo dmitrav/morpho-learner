@@ -24,7 +24,7 @@ def get_vit_pars(im_size, randomize=True):
     if randomize:
         return dict(image_size=im_size,  # 256
                     patch_size=random.sample([4, 8, 16, 32], 1)[0],  # 32
-                    num_classes=random.sample([2, 21, 32, 100, 1000], 1)[0],  # 1000
+                    num_classes=random.sample([x for x in range(2, 11)], 1)[0],  # 1000
                     dim=random.sample([64, 128, 256, 512, 1024], 1)[0],  # 1024
                     depth=random.sample([x for x in range(1, 7)], 1)[0],  # 6
                     heads=random.sample([x for x in range(1, 17)], 1)[0],  # 16
@@ -102,7 +102,7 @@ def run_training_for_64x64_cuts(epochs, grid=None, save_path='D:\ETH\projects\mo
     N = 350000
 
     if grid is None:
-        grid_size = 1
+        grid_size = 100
         grid = generate_grid(grid_size, 64, random_vit=True, random_dino=True)
 
     training_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)  # ~429000
@@ -110,7 +110,7 @@ def run_training_for_64x64_cuts(epochs, grid=None, save_path='D:\ETH\projects\mo
     training_drugs, _ = torch.utils.data.random_split(training_drugs, [N, training_drugs.__len__() - N])
     training_controls, _ = torch.utils.data.random_split(training_controls, [N, training_controls.__len__() - N])
 
-    joint_data = JointImageDataset([training_drugs, training_controls], transform=lambda x: x / 255.)
+    joint_data = JointImageDataset([training_drugs, training_controls], transform=lambda x: x / 255., n_channels=3)
     data_loader = DataLoader(joint_data, batch_size=batch_size, shuffle=True)
 
     train(grid, epochs, data_loader, save_path)
@@ -297,8 +297,4 @@ def train_best_models():
 
 if __name__ == "__main__":
 
-    for n_classes in [21, 100, 1000]:
-
-        model_path = 'D:\ETH\projects\morpho-learner\\res\dino\\n_classes={}\\'.format(n_classes)
-        data_path = 'D:\ETH\projects\morpho-learner\data\cut\\'
-        get_classification(model_path, data_path)
+    run_training_for_64x64_cuts(10)

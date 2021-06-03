@@ -33,7 +33,7 @@ class CustomImageDataset(Dataset):
 
 
 class JointImageDataset(Dataset):
-    def __init__(self, datasets, transform=None, target_transform=None):
+    def __init__(self, datasets, transform=None, target_transform=None, n_channels=1):
 
         for subset in datasets:
             subset.dataset.img_labels.insert(0, 'path', subset.dataset.img_dir)
@@ -41,6 +41,7 @@ class JointImageDataset(Dataset):
         self.img_labels = pandas.concat([subset.dataset.img_labels for subset in datasets])
         self.transform = transform
         self.target_transform = target_transform
+        self.n_channels = n_channels
 
     def __len__(self):
         return len(self.img_labels)
@@ -48,13 +49,15 @@ class JointImageDataset(Dataset):
     def __getitem__(self, idx):
         img_path = os.path.join(self.img_labels.iloc[idx, 0], self.img_labels.iloc[idx, 1])
 
-        # read 3 channels
-        image = numpy.array(Image.open(img_path).convert('RGB'))
-        image = numpy.moveaxis(image, -1, 0)  # set channels as the first dim
-        image = torch.Tensor(image)
-
-        # # read 1 channel
-        # image = read_image(img_path)
+        if self.n_channels == 3:
+            # read 3 channels
+            image = numpy.array(Image.open(img_path).convert('RGB'))
+            image = numpy.moveaxis(image, -1, 0)  # set channels as the first dim
+            image = torch.Tensor(image)
+        elif self.n_channels == 1:
+            image = read_image(img_path)
+        else:
+            raise ValueError()
 
         label = self.img_labels.iloc[idx, 2]
         if self.transform:

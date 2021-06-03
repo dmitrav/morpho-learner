@@ -12,8 +12,11 @@ from src.trainer import CustomImageDataset, JointImageDataset
 from src.trainer import plot_reconstruction, train_together, train_autoencoder, train_classifier_with_pretrained_encoder
 from src.trainer import train_deep_classifier_alone
 from src.analysis import plot_drugs_clustering, plot_cell_lines_clustering
+from src import dino
 
 
 if __name__ == "__main__":
 
-    pass
+    model_path = 'D:\ETH\projects\morpho-learner\\res\dino\\f7f44e6e\\'
+    data_path = 'D:\ETH\projects\morpho-learner\data\cut\\'
+    dino.get_classification(model_path, data_path)
