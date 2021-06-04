@@ -315,6 +315,7 @@ if __name__ == "__main__":
     # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
     # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
     path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\dcl_at_100_0.7424\\'
+    # path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\byol\\4f739bd0\\'
 
     device = torch.device('cuda')
 
@@ -329,6 +330,7 @@ if __name__ == "__main__":
     # # load a trained deep classifier to use it in the transform
     cl = DeepClassifier().to(device)
     cl.load_state_dict(torch.load(path_to_cl_model + 'deep_classifier.torch', map_location=device))
+    # cl.load_state_dict(torch.load(path_to_cl_model + 'dcl+byol_at_14.torch', map_location=device))
     cl.eval()
     cl = Sequential(*list(cl.model.children())[:-4])
 

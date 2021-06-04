@@ -19,4 +19,4 @@ if __name__ == "__main__":
 
     model_path = 'D:\ETH\projects\morpho-learner\\res\dino\\f7f44e6e\\'
     data_path = 'D:\ETH\projects\morpho-learner\data\cut\\'
-    dino.get_classification(model_path, data_path)
+    dino.cluster_images(model_path, data_path)

@@ -32,7 +32,7 @@ def get_byol_pars(im_size, randomize=True):
                     augment_fn=None,
                     augment_fn2=None,
                     moving_average_decay=random.sample([0.8, 0.9, 0.99], 1)[0],
-                    use_momentum=random.sample([True, False], 1)[0])
+                    use_momentum=True)
     else:
         return dict(image_size=im_size, hidden_layer='model.9')
 
@@ -75,7 +75,7 @@ def run_training_for_64x64_cuts(model, epochs, device, grid=None, save_path='D:\
     N = 350000
 
     if grid is None:
-        grid_size = 100
+        grid_size = 1
         grid = generate_grid(grid_size, 64, randomize=True)
 
     training_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)  # ~429000
@@ -152,35 +152,37 @@ def get_image_tensor(path):
     return image
 
 
-def get_classification(model_path, data_path):
+def get_accuracy(model,
+                 path_to_drugs='D:\ETH\projects\morpho-learner\data\cut\\',
+                 path_to_controls='D:\ETH\projects\morpho-learner\data\cut_controls\\'):
 
-    device = torch.device('cuda')
-    vit_pars = pandas.read_csv(model_path + 'vit_pars.csv', index_col=0)
-    # convert default types to int, except dropout ratios
-    vit_pars = vit_pars.T.convert_dtypes(vit_par_types).T
-    vit_pars = dict(vit_pars['values'])
+    Nd, Nc = 380000, 330000  # ~89%
+    transform = lambda x: x / 255.
+    training_drugs = CustomImageDataset(path_to_drugs, 0, transform=transform)
+    training_drugs, _ = torch.utils.data.random_split(training_drugs, [Nd, training_drugs.__len__() - Nd])
+    training_controls = CustomImageDataset(path_to_controls, 1, transform=transform)
+    training_controls, _ = torch.utils.data.random_split(training_controls, [Nc, training_controls.__len__() - Nc])
 
-    model = ViT(**vit_pars).to(device)
-    checkpoint = [file for file in os.listdir(model_path) if file.endswith('.torch') and file.startswith('best')][0]
-    model.load_state_dict(torch.load(model_path + checkpoint, map_location=device))
-    model.eval()
+    loader_train_drugs = DataLoader(training_drugs, batch_size=512, shuffle=True)
+    loader_train_controls = DataLoader(training_controls, batch_size=512, shuffle=True)
 
-    model = Recorder(model)  # to retrieve attentions and predictions
+    acc = 0
+    for batch_features, batch_labels in loader_train_drugs:
+        # process drugs data
+        batch_features = batch_features.float().to(device)
+        outputs = model(batch_features)
+        true_negatives = (outputs.argmax(-1) == 0).cpu().float().detach().numpy()
+        # process controls data
+        batch_features, batch_labels = next(iter(loader_train_controls))
+        outputs = model(batch_features.float().to(device))
+        true_positives = (outputs.argmax(-1) == 1).cpu().float().detach().numpy()
 
-    for file in tqdm(os.listdir(data_path)):
-        if file.endswith('.jpg'):
+        acc += (true_positives.sum() + true_negatives.sum()) / (len(true_positives) + len(true_negatives))
 
-            image = get_image_tensor(data_path + file)
-            # forward pass now returns predictions and the attention maps
-            preds, attns = model(image.to(device))
-
-            # retrieve predicted class
-            predicted_class = str(int(torch.nn.Softmax(dim=1)(preds).argmax()))
-            predicted_class_folder = model_path + 'clustering\\{}\\'.format(predicted_class)
-            if not os.path.exists(predicted_class_folder):
-                os.makedirs(predicted_class_folder)
-            # copy file to a class folder
-            shutil.copyfile(data_path+file, predicted_class_folder+file)
+    # compute epoch training accuracy
+    acc = round(acc / len(loader_train_drugs), 4)
+    print('acc={}'.format(acc))
+    return acc
 
 
 if __name__ == '__main__':
@@ -190,6 +192,7 @@ if __name__ == '__main__':
     path_to_model = 'D:\ETH\projects\morpho-learner\\res\dcl_at_100_0.7424\\'
     cl = DeepClassifier().to(device)
     cl.load_state_dict(torch.load(path_to_model + 'deep_classifier.torch', map_location=device))
-    cl.eval()
+    cl.eval()  # to set initial weights
 
     run_training_for_64x64_cuts(cl, 10, device)
+

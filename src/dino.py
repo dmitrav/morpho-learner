@@ -213,7 +213,7 @@ def plot_attentions(attns):
     pyplot.show()
 
 
-def get_classification(model_path, data_path):
+def cluster_images(model_path, data_path):
 
     device = torch.device('cuda')
     vit_pars = pandas.read_csv(model_path + 'vit_pars.csv', index_col=0)
