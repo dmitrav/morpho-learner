@@ -54,7 +54,7 @@ class Autoencoder(nn.Module):
 
 class Classifier(nn.Module):
 
-    def __init__(self, **kwargs):
+    def __init__(self, n_classes=2):
         super().__init__()
 
         # plugs in after convolutional autoencoder -> needs flattening of the filters
@@ -62,7 +62,7 @@ class Classifier(nn.Module):
             nn.Flatten(),
             nn.Linear(2048, 256),
             nn.LeakyReLU(),
-            nn.Linear(256, 2),
+            nn.Linear(256, n_classes),
             nn.Softmax(dim=1)
         )
 
@@ -78,7 +78,7 @@ class Classifier(nn.Module):
 
 class DeepClassifier(nn.Module):
 
-    def __init__(self, **kwargs):
+    def __init__(self, n_classes=2):
         super().__init__()
 
         self.model = nn.Sequential(
@@ -97,7 +97,7 @@ class DeepClassifier(nn.Module):
             nn.Flatten(),
             nn.Linear(2048, 256),
             nn.LeakyReLU(True),
-            nn.Linear(256, 2),
+            nn.Linear(256, n_classes),
             nn.Softmax(dim=1)
         )
 

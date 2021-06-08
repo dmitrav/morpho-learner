@@ -3,6 +3,7 @@ from matplotlib import pyplot
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
 from torchvision.io import read_image
+from torchmetrics import Accuracy
 import torch.multiprocessing as mp
 from PIL import Image
 
@@ -43,18 +44,14 @@ class CustomImageDataset(Dataset):
         return sample
 
     def _infer_label(self, filename):
-        """ This method infers labels from unique combinations of cell lines and drugs.
-            Meta info is retrieved from the filenames. """
+        """ This method infers drugs labels from the filenames. """
 
-        combinations = list(itertools.product(constants.cell_lines, constants.drugs))
-        mapper = dict(zip(combinations, [x for x in range(len(combinations))]))
+        mapper = dict(zip(constants.drugs, [x for x in range(len(constants.drugs))]))
+        self.n_classes = len(constants.drugs)
 
-        for line in constants.cell_lines:
-            if line in filename:
-                for drug in constants.drugs:
-                    if drug in filename:
-                        key = (line, drug)
-                        return mapper[key]
+        for drug in constants.drugs:
+            if drug in filename:
+                return mapper[drug]
 
 
 class JointImageDataset(Dataset):
@@ -67,6 +64,7 @@ class JointImageDataset(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.n_channels = n_channels
+        self.n_classes = sum([subset.dataset.n_classes for subset in datasets])
 
     def __len__(self):
         return len(self.img_labels)
@@ -139,8 +137,8 @@ def run_autoencoder_training(data_loader_train, data_loader_test, model, optimiz
     return loss
 
 
-def run_classifier_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
-                            model, optimizer, criterion, device, lr_scheduler=None, epochs=10):
+def run_weakly_supervised_classifier_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
+                                              model, optimizer, criterion, device, lr_scheduler=None, epochs=10):
     acc = 0
     for epoch in range(epochs):
 
@@ -203,6 +201,76 @@ def run_classifier_training(loader_train_drugs, loader_train_controls, loader_va
         print("epoch {}/{}: {} min, loss = {:.4f}, acc = {:.4f}, val_acc = {:.4f}".format(epoch + 1, epochs, int((time.time() - start) / 60), loss, acc, val_acc))
 
     return acc
+
+
+def run_supervised_classifier_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
+                                       model, optimizer, criterion, device, lr_scheduler=None, epochs=10):
+    f_acc = Accuracy().to(device)
+
+    drugs_acc, controls_acc = 0, 0
+    for epoch in range(epochs):
+
+        start = time.time()
+        loss = 0
+        drugs_acc, controls_acc = 0, 0
+        for batch_features, batch_labels in loader_train_drugs:
+            # load it to the active device
+            batch_features = batch_features.float().to(device)
+            # reset the gradients back to zero
+            optimizer.zero_grad()
+            with torch.enable_grad():
+                train_loss = 0
+
+                # process drugs data
+                outputs = model(batch_features)
+                train_loss += criterion(outputs.to(device), batch_labels.to(device))
+                drugs_acc += float(f_acc(outputs.to(device), batch_labels.to(device)))
+
+                # process controls data
+                batch_features, batch_labels = next(iter(loader_train_controls))
+                outputs = model(batch_features.float().to(device))
+                train_loss += criterion(outputs.to(device), batch_labels.to(device))
+                controls_acc += float(f_acc(outputs.to(device), batch_labels.to(device)))
+
+                # compute accumulated gradients
+                train_loss.backward()
+                # perform parameter update based on current gradients
+                optimizer.step()
+                # add the mini-batch training loss to epoch loss
+                loss += train_loss.item()
+
+        # compute epoch training loss
+        loss = loss / len(loader_train_drugs)
+        # compute epoch training accuracy
+        drugs_acc = drugs_acc / len(loader_train_drugs)
+        controls_acc = controls_acc / len(loader_train_drugs)
+
+        val_drugs_acc, val_controls_acc = 0, 0
+        for batch_features, batch_labels in loader_val_drugs:
+            # process drugs data
+            batch_features = batch_features.float().to(device)
+            outputs = model(batch_features)
+            val_drugs_acc += float(f_acc(outputs.to(device), batch_labels.to(device)))
+
+            # process controls data
+            batch_features, batch_labels = next(iter(loader_val_controls))
+            outputs = model(batch_features.float().to(device))
+            val_controls_acc += float(f_acc(outputs.to(device), batch_labels.to(device)))
+
+        # compute epoch training accuracy
+        val_drugs_acc = val_drugs_acc / len(loader_val_drugs)
+        val_controls_acc = val_controls_acc / len(loader_val_drugs)
+
+        # update lr
+        if lr_scheduler is not None:
+            lr_scheduler.step()
+
+        # display the epoch training loss
+        print("epoch {}/{}: {} min, loss = {:.4f}\n"
+              "drugs_acc = {:.4f}, controls_acc = {:.4f}, val_drugs_acc = {:.4f}, val_controls_acc = {:.4f}"
+              .format(epoch + 1, epochs, int((time.time() - start) / 60), loss, drugs_acc, controls_acc, val_drugs_acc, val_controls_acc))
+
+    return drugs_acc, controls_acc
 
 
 def run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
@@ -402,8 +470,8 @@ def train_classifier_with_pretrained_encoder(epochs, trained_ae, batch_size=256,
     # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 50, 80], gamma=0.3)
     criterion = nn.CrossEntropyLoss()
 
-    last_epoch_acc = run_classifier_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
-                                             model, optimizer, criterion, device, epochs=epochs)
+    last_epoch_acc = run_weakly_supervised_classifier_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
+                                                               model, optimizer, criterion, device, epochs=epochs)
     if deep:
         save_path = save_path.replace('cl', 'dcl_{}'.format(round(last_epoch_acc, 4)))
     else:
@@ -415,11 +483,11 @@ def train_classifier_with_pretrained_encoder(epochs, trained_ae, batch_size=256,
     torch.save(model.state_dict(), save_path + 'classifier.torch')
 
 
-def train_deep_classifier_alone(epochs, trained_cl=None, batch_size=256, device=torch.device('cuda')):
+def train_deep_classifier_weakly(epochs, trained_cl=None, batch_size=256, device=torch.device('cuda')):
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
-    save_path = 'D:\ETH\projects\morpho-learner\\res\\dcl\\'
+    save_path = 'D:\ETH\projects\morpho-learner\\res\\dcl_weakly\\'
 
     Nd, Nc = 380000, 330000  # ~89%
     transform = lambda x: x / 255.
@@ -446,10 +514,55 @@ def train_deep_classifier_alone(epochs, trained_cl=None, batch_size=256, device=
     # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 50, 80], gamma=0.3)
     criterion = nn.CrossEntropyLoss()
 
-    last_epoch_acc = run_classifier_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
-                                             model, optimizer, criterion, device, epochs=epochs)
+    last_epoch_acc = run_weakly_supervised_classifier_training(loader_train_drugs, loader_train_controls,
+                                                               loader_val_drugs, loader_val_controls,
+                                                               model, optimizer, criterion, device, epochs=epochs)
 
     save_path = save_path.replace('dcl', 'dcl_{}'.format(round(last_epoch_acc, 4)))
+
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    torch.save(model.state_dict(), save_path + 'deep_classifier.torch')
+
+
+def train_deep_classifier(epochs, trained_cl=None, batch_size=256, device=torch.device('cuda')):
+
+    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
+    path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
+    save_path = 'D:\ETH\projects\morpho-learner\\res\\dcl-super\\'
+
+    Nd, Nc = 380000, 330000  # ~89% of drugs
+    transform = lambda x: x / 255.
+
+    training_drugs = CustomImageDataset(path_to_drugs, -1, transform=transform)
+    training_drugs, the_rest = torch.utils.data.random_split(training_drugs, [Nd, training_drugs.__len__() - Nd])
+    validation_drugs, _ = torch.utils.data.random_split(the_rest, [the_rest.__len__(), 0])
+
+    training_controls = CustomImageDataset(path_to_controls, -1, transform=transform)
+    training_controls, the_rest = torch.utils.data.random_split(training_controls, [Nc, training_controls.__len__() - Nc])
+    validation_controls, _ = torch.utils.data.random_split(the_rest, [the_rest.__len__(), 0])
+
+    loader_train_drugs = DataLoader(training_drugs, batch_size=batch_size, shuffle=True)
+    loader_val_drugs = DataLoader(validation_drugs, batch_size=batch_size, shuffle=True)
+    loader_train_controls = DataLoader(training_controls, batch_size=batch_size // 32, shuffle=True)
+    loader_val_controls = DataLoader(validation_controls, batch_size=batch_size // 32, shuffle=True)
+
+    if trained_cl is not None:
+        model = trained_cl
+    else:
+        n_classes = len(constants.drugs)  # anticipated drug effects
+        model = DeepClassifier(n_classes=n_classes).to(device)
+
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 50, 80], gamma=0.3)
+    criterion = nn.CrossEntropyLoss()
+
+    last_drugs_acc, last_controls_acc = run_supervised_classifier_training(loader_train_drugs, loader_train_controls,
+                                                        loader_val_drugs, loader_val_controls,
+                                                        model, optimizer, criterion, device, epochs=epochs)
+
+    save_path = save_path.replace('dcl-super', 'dcl-super_{}'.format(round(last_drugs_acc, 4)))
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -534,7 +647,7 @@ if __name__ == "__main__":
         cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
         cl.eval()
 
-        train_deep_classifier_alone(40, trained_cl=cl, device=device)
+        train_deep_classifier_weakly(40, trained_cl=cl, device=device)
 
     if train_both_weakly:
         # load models and continue training
@@ -556,4 +669,5 @@ if __name__ == "__main__":
         byol.run_training_for_64x64_cuts(cl, 100, device)
 
     if train_cl_supervised:
-        pass
+
+        train_deep_classifier(60, batch_size=512, device=device)
