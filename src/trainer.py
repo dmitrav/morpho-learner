@@ -1,4 +1,4 @@
-import os, pandas, time, torch, numpy
+import os, pandas, time, torch, numpy, itertools
 from matplotlib import pyplot
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
@@ -7,15 +7,26 @@ import torch.multiprocessing as mp
 from PIL import Image
 
 from src.models import Autoencoder, Classifier, DeepClassifier
+from src import byol, constants
 
 
 class CustomImageDataset(Dataset):
+
     def __init__(self, img_dir, label, transform=None, target_transform=None):
         self.img_dir = img_dir
         self.transform = transform
         self.target_transform = target_transform
-        self.img_labels = pandas.DataFrame({'img': [f for f in os.listdir(img_dir)],
-                                            'label': [label for f in os.listdir(img_dir)]})
+
+        if label > 0:
+            self.img_labels = pandas.DataFrame({
+                'img': [f for f in os.listdir(img_dir)],
+                'label': [label for f in os.listdir(img_dir)]
+            })
+        else:
+            self.img_labels = pandas.DataFrame({
+                'img': [f for f in os.listdir(img_dir)],
+                'label': [self._infer_label(f) for f in os.listdir(img_dir)]
+            })
 
     def __len__(self):
         return len(self.img_labels)
@@ -30,6 +41,20 @@ class CustomImageDataset(Dataset):
             label = self.target_transform(label)
         sample = (image, label)
         return sample
+
+    def _infer_label(self, filename):
+        """ This method infers labels from unique combinations of cell lines and drugs.
+            Meta info is retrieved from the filenames. """
+
+        combinations = list(itertools.product(constants.cell_lines, constants.drugs))
+        mapper = dict(zip(combinations, [x for x in range(len(combinations))]))
+
+        for line in constants.cell_lines:
+            if line in filename:
+                for drug in constants.drugs:
+                    if drug in filename:
+                        key = (line, drug)
+                        return mapper[key]
 
 
 class JointImageDataset(Dataset):
@@ -485,10 +510,11 @@ def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, dev
 
 if __name__ == "__main__":
 
-    train_ae_alone = False
-    train_cl_alone = True
-    train_both_simultaneously = True
-    train_cl_alone_with_pretrained_ae = False
+    train_ae_alone = False  # convolutional autoencoder
+    train_cl_weakly = False  # weakly supervised classifier
+    train_both_weakly = False  # autoencoder + weakly supervised classifier (2 classes)
+    train_cl_with_byol = False  # train cl with self-supervision as in BYOL
+    train_cl_supervised = True  # train classifier with 684 classes
 
     device = torch.device('cuda')
 
@@ -501,7 +527,7 @@ if __name__ == "__main__":
 
         train_autoencoder(40, trained_ae=ae, device=device)
 
-    if train_cl_alone:
+    if train_cl_weakly:
         # load model and continue training
         path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\dcl_at_60_0.7292\\deep_classifier.torch"
         cl = DeepClassifier().to(device)
@@ -510,8 +536,8 @@ if __name__ == "__main__":
 
         train_deep_classifier_alone(40, trained_cl=cl, device=device)
 
-    if train_both_simultaneously:
-
+    if train_both_weakly:
+        # load models and continue training
         path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\aecl_at_60_0.6672_0.7217\\ae.torch"
         ae = Autoencoder().to(device)
         ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
@@ -524,14 +550,10 @@ if __name__ == "__main__":
 
         train_together(40, trained_ae=ae, trained_cl=cl, device=device)
 
-    if train_cl_alone_with_pretrained_ae:
-        """ classification based on the reduced dimensions, obtained by pretrained autoencoder
-            not directly comparable to autoencoder and advesarial approaches -> probably redundant """
+    if train_cl_with_byol:
 
-        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_0.6673\\'
-        # load trained autoencoder to use it in the transform
-        ae = Autoencoder().to(device)
-        ae.load_state_dict(torch.load(path_to_ae_model+'autoencoder.torch', map_location=device))
-        ae.eval()
+        cl = DeepClassifier().to(device)
+        byol.run_training_for_64x64_cuts(cl, 100, device)
 
-        train_classifier_with_pretrained_encoder(100, ae)
+    if train_cl_supervised:
+        pass

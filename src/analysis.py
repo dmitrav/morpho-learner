@@ -183,7 +183,7 @@ def calculate_cluster_enrichments(cluster_counts):
 
     # correct for multiple hypothesis
     adj_p_values = multipletests(cluster_enrichments.values.flatten(), method='bonferroni')[1]
-    for i in range(len(all_drugs)-1):
+    for i in range(len(all_drugs)-2):
         adj_p_values = multipletests(adj_p_values, method='bonferroni')[1]
 
     # update the dataframe with adjusted values
@@ -314,8 +314,8 @@ if __name__ == "__main__":
 
     # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
     # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
-    path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\dcl_at_100_0.7424\\'
-    # path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\byol\\4f739bd0\\'
+    # path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\dcl_at_100_0.7424\\'
+    path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\byol\\b6408306\\'
 
     device = torch.device('cuda')
 
@@ -329,8 +329,8 @@ if __name__ == "__main__":
 
     # # load a trained deep classifier to use it in the transform
     cl = DeepClassifier().to(device)
-    cl.load_state_dict(torch.load(path_to_cl_model + 'deep_classifier.torch', map_location=device))
-    # cl.load_state_dict(torch.load(path_to_cl_model + 'dcl+byol_at_14.torch', map_location=device))
+    # cl.load_state_dict(torch.load(path_to_cl_model + 'deep_classifier.torch', map_location=device))
+    cl.load_state_dict(torch.load(path_to_cl_model + 'best_dcl+byol_at_16.torch', map_location=device))
     cl.eval()
     cl = Sequential(*list(cl.model.children())[:-4])
 

@@ -93,6 +93,7 @@ def train(model, grid, epochs, data_loader, device, save_path):
 
     for i, id in enumerate(grid['id']):
 
+        print(pandas.DataFrame(grid['byol'][i], index=['values'], columns=grid['byol'][i].keys()).T.to_string())
         print('training for set {} started'.format(id))
         if not os.path.exists(save_path + id):
             os.makedirs(save_path + id)
@@ -154,7 +155,8 @@ def get_image_tensor(path):
 
 def get_accuracy(model,
                  path_to_drugs='D:\ETH\projects\morpho-learner\data\cut\\',
-                 path_to_controls='D:\ETH\projects\morpho-learner\data\cut_controls\\'):
+                 path_to_controls='D:\ETH\projects\morpho-learner\data\cut_controls\\',
+                 device=torch.device('cuda')):
 
     Nd, Nc = 380000, 330000  # ~89%
     transform = lambda x: x / 255.
@@ -186,13 +188,10 @@ def get_accuracy(model,
 
 
 if __name__ == '__main__':
+    pass
 
-    device = torch.device('cuda')
-
-    path_to_model = 'D:\ETH\projects\morpho-learner\\res\dcl_at_100_0.7424\\'
-    cl = DeepClassifier().to(device)
-    cl.load_state_dict(torch.load(path_to_model + 'deep_classifier.torch', map_location=device))
-    cl.eval()  # to set initial weights
-
-    run_training_for_64x64_cuts(cl, 10, device)
-
+    # TODO:
+    #  - try weight decay,
+    #  - try Lars optimizer and full BYOL paper set-up,
+    #  - train classifier on top of learned representations,
+    #  - repeat the analysis for learned representations

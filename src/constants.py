@@ -1,14 +1,14 @@
 
-version = "v.0.1.26-cuda"
+version = "v.0.1.27-cuda"
 
 
 def get_type_by_name(name):
     if name in cell_lines:
         return 'cell line'
-    elif name in drugs:
-        return 'drug'
     elif name in ['DMSO', 'PBS']:
         return 'control'
+    elif name in drugs:
+        return 'drug'
     else:
         raise ValueError("Unknown cell line or drug: {}".format(name))
 
@@ -27,8 +27,10 @@ drugs = ['Chlormethine', 'Clofarabine', 'Panzem-2-ME2', 'Pemetrexed', 'Asparagin
          'Oligomycin A', 'Trametinib', 'Oxaliplatin', 'Rapamycin', 'Etomoxir',
          'Lenvatinib', 'Oxfenicine', 'Mercaptopurine', 'Metformin', 'Omacetaxine',
          'Cladribine', 'Paclitaxel', 'Methotrexate', 'Topotecan',
-         'YC-1', 'Decitabine']
+         'YC-1', 'Decitabine', 'PBS', 'DMSO']
 
+
+# for vision transformer
 vit_par_types = {
     'image_size': int,
     'patch_size': int,
