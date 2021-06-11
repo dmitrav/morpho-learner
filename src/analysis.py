@@ -220,9 +220,7 @@ def save_cluster_members(path_to_drug_images, image_files, image_clusters, image
     print("cluster members saved")
 
 
-def plot_drugs_clustering(path_to_drugs, save_path, transform):
-
-    min_cluster_size = 300
+def plot_drugs_clustering(min_cluster_size, path_to_drugs, save_path, transform):
 
     for drug in tqdm(all_drugs):
 
@@ -320,9 +318,7 @@ def get_image_encodings_from_path(path, common_image_id, transform, n=None):
     return encodings, image_ids
 
 
-def plot_cell_lines_clustering(path_to_drugs, path_to_controls, save_path, transform):
-
-    min_cluster_size = 300
+def plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, save_path, transform):
 
     for cell_line in tqdm(all_cell_lines):
 
@@ -407,10 +403,12 @@ if __name__ == "__main__":
 
     device = torch.device('cuda')
 
-    analyze_unsupervised = False
-    analyze_weakly_supervised = False
-    analyze_adversarial = False
-    analyze_self_supervised = False
+    analyze_unsupervised = True
+    analyze_weakly_supervised = True
+    analyze_adversarial = True
+    analyze_self_supervised = True
+
+    min_cluster_size = 300
 
     if analyze_unsupervised:
         path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
@@ -421,8 +419,8 @@ if __name__ == "__main__":
         transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
         # run the analysis for unsupervised approach
-        plot_cell_lines_clustering(path_to_drugs, path_to_controls, path_to_ae_model + 'new_cell_lines_clustering\\', transform)
-        plot_drugs_clustering(path_to_drugs, path_to_ae_model + 'new_drugs_clustering\\', transform)
+        plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_ae_model + 'new_cell_lines_clustering\\', transform)
+        plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_ae_model + 'new_drugs_clustering\\', transform)
         plot_full_data_umaps(path_to_drugs, path_to_ae_model + 'full_data_umaps\\', transform)
 
     if analyze_adversarial:
@@ -449,8 +447,8 @@ if __name__ == "__main__":
         transform = lambda x: cl(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
         # run the analysis for weakly supervised approach
-        plot_cell_lines_clustering(path_to_drugs, path_to_controls, path_to_cl_model + 'new_cell_lines_clustering\\', transform)
-        plot_drugs_clustering(path_to_drugs, path_to_cl_model + 'new_drugs_clustering\\', transform)
+        plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_cl_model + 'new_cell_lines_clustering\\', transform)
+        plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_cl_model + 'new_drugs_clustering\\', transform)
         plot_full_data_umaps(path_to_drugs, path_to_cl_model + 'full_data_umaps\\', transform)
 
     if analyze_self_supervised:
@@ -464,6 +462,6 @@ if __name__ == "__main__":
         transform = lambda x: cl(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
         # run the analysis for weakly supervised approach
-        plot_cell_lines_clustering(path_to_drugs, path_to_controls, path_to_cl_model + 'new_cell_lines_clustering\\', transform)
-        plot_drugs_clustering(path_to_drugs, path_to_cl_model + 'new_drugs_clustering\\', transform)
+        plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_cl_model + 'new_cell_lines_clustering\\', transform)
+        plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_cl_model + 'new_drugs_clustering\\', transform)
         plot_full_data_umaps(path_to_drugs, path_to_cl_model + 'full_data_umaps\\', transform)
