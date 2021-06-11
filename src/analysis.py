@@ -3,6 +3,7 @@ import os, pandas, time, torch, numpy, umap, seaborn, shutil, random
 from matplotlib import pyplot
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import normalize
+from sklearn.decomposition import PCA
 from torchvision.io import read_image
 from tqdm import tqdm
 from hdbscan import HDBSCAN
@@ -248,6 +249,76 @@ def plot_drugs_clustering(path_to_drugs, save_path, transform,
         save_cluster_members(path_to_drugs, image_ids['filenames'], clusters, drug, save_path)
 
 
+def plot_drugs_clustering_with_different_parameters(drugs, path_to_drugs, save_path, transform):
+
+    for drug in drugs:
+
+        encodings, image_ids = get_image_encodings_from_path(path_to_drugs, drug, transform)
+        encodings = numpy.array(encodings)
+
+        for min_cluster_size in range(100, 500, 20):
+
+            reducer = umap.UMAP(n_neighbors=min_cluster_size, metric='euclidean')
+            start = time.time()
+            embedding = reducer.fit_transform(encodings)
+            print('umap transform with n = {}, took {} s'.format(min_cluster_size, int(time.time() - start)))
+
+            # cluster encodings
+            start = time.time()
+            clusterer = HDBSCAN(metric='euclidean', min_samples=1, min_cluster_size=min_cluster_size, allow_single_cluster=False)
+            clusterer.fit(embedding)
+            clusters = clusterer.labels_
+            print('hdbscan clustering with n = {}, took {} s'.format(min_cluster_size, int(time.time() - start)))
+
+            n_clusters = numpy.max(clusters) + 1
+            noise = int(numpy.sum(clusters == -1) / len(clusters) * 100)
+            print('min_cluster_size={}, min_samples=1, n clusters={}'.format(min_cluster_size, n_clusters))
+            print('noise={}%\n'.format(noise))
+
+            if n_clusters > 10:
+                print("too many clusters to plot\n")
+            else:
+                if not os.path.exists(save_path + 'mcs={}\\'.format(min_cluster_size)):
+                    os.makedirs(save_path + 'mcs={}\\'.format(min_cluster_size))
+
+                # filter out -1 ('noise') cluster
+                x, y = [], []
+                cells_labels, clusters_labels = [], []
+                filenames = []
+                for i in range(embedding.shape[0]):
+                    if clusters[i] != -1:
+                        x.append(embedding[i,0])
+                        y.append(embedding[i,1])
+                        cells_labels.append(image_ids['cell_lines'][i])
+                        clusters_labels.append(str(clusters[i]))
+                        filenames.append(image_ids['filenames'][i])
+
+                # umap coloring cell lines
+                pyplot.figure()
+                seaborn.set(font_scale=0.5)
+                seaborn.color_palette('colorblind')
+                seaborn.axes_style('whitegrid')
+                seaborn.scatterplot(x=x, y=y, hue=cells_labels, s=10)
+                pyplot.legend()
+                pyplot.title('{} UMAP: n={}, metric=euclidean'.format(drug, min_cluster_size), fontsize=8)
+                pyplot.savefig(save_path + 'mcs={}\\{}_umap_hue=cell_line_n={}_metric=euclidean.png'.format(min_cluster_size, drug, min_cluster_size), dpi=300)
+                pyplot.close('all')
+
+                # umap coloring clusters
+                pyplot.figure()
+                seaborn.set(font_scale=0.5)
+                seaborn.color_palette('colorblind')
+                seaborn.axes_style('whitegrid')
+                seaborn.scatterplot(x=x, y=y, hue=clusters_labels, s=10)
+                pyplot.legend()
+                pyplot.title('{} UMAP: n={}, metric=euclidean'.format(drug, min_cluster_size), fontsize=8)
+                pyplot.savefig(save_path + 'mcs={}\\{}_umap_hue=clusters_n={}_metric=euclidean.png'.format(min_cluster_size, drug, min_cluster_size), dpi=300)
+                pyplot.close('all')
+
+                # save cluster representatives
+                save_cluster_members(path_to_drugs, filenames, clusters_labels, drug, save_path + 'mcs={}\\'.format(min_cluster_size))
+
+
 def get_image_encodings_from_path(path, common_image_id, transform, n=None):
 
     encodings = []
@@ -313,40 +384,41 @@ if __name__ == "__main__":
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
 
     # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
-    # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
+    path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
     # path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\dcl_at_100_0.7424\\'
-    path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\byol\\b6408306\\'
+    # path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\byol\\b6408306\\'
 
     device = torch.device('cuda')
 
-    # # load a trained autoencoder to use it in the transform
-    # ae = Autoencoder().to(device)
+    # load a trained autoencoder to use it in the transform
+    ae = Autoencoder().to(device)
     # ae.load_state_dict(torch.load(path_to_ae_model + 'autoencoder.torch', map_location=device))
-    # ae.load_state_dict(torch.load(path_to_ae_model + 'ae.torch', map_location=device))
-    # ae.eval()
-    # # create a transform function with autoencoder
-    # transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+    ae.load_state_dict(torch.load(path_to_ae_model + 'ae.torch', map_location=device))
+    ae.eval()
+    # create a transform function with autoencoder
+    transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
     # # load a trained deep classifier to use it in the transform
-    cl = DeepClassifier().to(device)
+    # cl = DeepClassifier().to(device)
     # cl.load_state_dict(torch.load(path_to_cl_model + 'deep_classifier.torch', map_location=device))
-    cl.load_state_dict(torch.load(path_to_cl_model + 'best_dcl+byol_at_16.torch', map_location=device))
-    cl.eval()
-    cl = Sequential(*list(cl.model.children())[:-4])
+    # cl.load_state_dict(torch.load(path_to_cl_model + 'best_dcl+byol_at_16.torch', map_location=device))
+    # cl.eval()
+    # cl = Sequential(*list(cl.model.children())[:-4])
+    # transform = lambda x: cl(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
-    transform = lambda x: cl(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+    # save_path = path_to_cl_model + 'full_data_umaps\\'
+    # plot_full_data_umaps(path_to_drugs, save_path, transform)
+    #
+    # save_path = path_to_cl_model + 'cell_lines_umaps\\'
+    # plot_cell_lines_umaps(path_to_drugs, save_path, transform)
+    #
+    # save_path = path_to_cl_model + 'drugs_umaps\\'
+    # plot_drugs_umaps(path_to_drugs, save_path, transform)
 
-    save_path = path_to_cl_model + 'full_data_umaps\\'
-    plot_full_data_umaps(path_to_drugs, save_path, transform)
+    # save_path = path_to_ae_model + 'drugs_clustering_mcs=20_ms=1\\'
+    # plot_drugs_clustering(path_to_drugs, save_path, transform, min_cluster_size=20, min_samples=1)
 
-    save_path = path_to_cl_model + 'cell_lines_umaps\\'
-    plot_cell_lines_umaps(path_to_drugs, save_path, transform)
+    # save_path = path_to_cl_model + 'cell_lines_clustering_mcs=30_ms=1\\'
+    # plot_cell_lines_clustering(path_to_drugs, path_to_controls, save_path, transform, min_cluster_size=30, min_samples=1)
 
-    save_path = path_to_cl_model + 'drugs_umaps\\'
-    plot_drugs_umaps(path_to_drugs, save_path, transform)
-
-    save_path = path_to_cl_model + 'drugs_clustering_mcs=20_ms=1\\'
-    plot_drugs_clustering(path_to_drugs, save_path, transform, min_cluster_size=20, min_samples=1)
-
-    save_path = path_to_cl_model + 'cell_lines_clustering_mcs=30_ms=1\\'
-    plot_cell_lines_clustering(path_to_drugs, path_to_controls, save_path, transform, min_cluster_size=30, min_samples=1)
+    plot_drugs_clustering_with_different_parameters(['Cladribine'], path_to_drugs, path_to_ae_model+'cladribine\\', transform)
