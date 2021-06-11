@@ -412,11 +412,11 @@ if __name__ == "__main__":
 
     if analyze_unsupervised:
         path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
-        ae = Autoencoder().to(device)
+        model = Autoencoder().to(device)
         # load a trained autoencoder to use it in the transform
-        ae.load_state_dict(torch.load(path_to_ae_model + 'autoencoder.torch', map_location=device)).eval()
+        model.load_state_dict(torch.load(path_to_ae_model + 'autoencoder.torch', map_location=device)).eval()
         # create a transform function with autoencoder
-        transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+        transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
         # run the analysis for unsupervised approach
         plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_ae_model + 'new_cell_lines_clustering\\', transform)
@@ -425,11 +425,11 @@ if __name__ == "__main__":
 
     if analyze_adversarial:
         path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
-        ae = Autoencoder().to(device)
+        model = Autoencoder().to(device)
         # load a trained autoencoder to use it in the transform
-        ae.load_state_dict(torch.load(path_to_ae_model + 'ae.torch', map_location=device)).eval()
+        model.load_state_dict(torch.load(path_to_ae_model + 'ae.torch', map_location=device)).eval()
         # create a transform function with autoencoder
-        transform = lambda x: ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+        transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
         # run the analysis for adversarial approach
         plot_cell_lines_clustering(path_to_drugs, path_to_controls, path_to_ae_model + 'new_cell_lines_clustering\\', transform)
@@ -438,13 +438,13 @@ if __name__ == "__main__":
 
     if analyze_weakly_supervised:
         path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\dcl_at_100_0.7424\\'
-        cl = DeepClassifier().to(device)
+        model = DeepClassifier().to(device)
         # load a trained deep classifier to use it in the transform
-        cl.load_state_dict(torch.load(path_to_cl_model + 'deep_classifier.torch', map_location=device)).eval()
+        model.load_state_dict(torch.load(path_to_cl_model + 'deep_classifier.torch', map_location=device)).eval()
         # truncate to the layer with learned representations
-        cl = Sequential(*list(cl.model.children())[:-4])
+        model = Sequential(*list(model.model.children())[:-4])
         # create a transform function with weakly supervised classifier
-        transform = lambda x: cl(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+        transform = lambda x: model(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
         # run the analysis for weakly supervised approach
         plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_cl_model + 'new_cell_lines_clustering\\', transform)
@@ -452,14 +452,14 @@ if __name__ == "__main__":
         plot_full_data_umaps(path_to_drugs, path_to_cl_model + 'full_data_umaps\\', transform)
 
     if analyze_self_supervised:
-        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\byol\\b6408306\\'
-        cl = DeepClassifier().to(device)
+        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\dcl+byol_at_17\\'
+        model = DeepClassifier().to(device)
         # load a trained deep classifier to use it in the transform
-        cl.load_state_dict(torch.load(path_to_cl_model + 'best_dcl+byol_at_16.torch', map_location=device)).eval()
+        model.load_state_dict(torch.load(path_to_cl_model + 'best_dcl+byol_at_16.torch', map_location=device)).eval()
         # truncate to the layer with learned representations
-        cl = Sequential(*list(cl.model.children())[:-4])
+        model = Sequential(*list(model.model.children())[:-4])
         # create a transform function with weakly supervised classifier
-        transform = lambda x: cl(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+        transform = lambda x: model(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
         # run the analysis for weakly supervised approach
         plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_cl_model + 'new_cell_lines_clustering\\', transform)
