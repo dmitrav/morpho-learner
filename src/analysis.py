@@ -414,7 +414,8 @@ if __name__ == "__main__":
         path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
         model = Autoencoder().to(device)
         # load a trained autoencoder to use it in the transform
-        model.load_state_dict(torch.load(path_to_ae_model + 'autoencoder.torch', map_location=device)).eval()
+        model.load_state_dict(torch.load(path_to_ae_model + 'autoencoder.torch', map_location=device))
+        model.eval()
         # create a transform function with autoencoder
         transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
@@ -427,20 +428,22 @@ if __name__ == "__main__":
         path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
         model = Autoencoder().to(device)
         # load a trained autoencoder to use it in the transform
-        model.load_state_dict(torch.load(path_to_ae_model + 'ae.torch', map_location=device)).eval()
+        model.load_state_dict(torch.load(path_to_ae_model + 'ae.torch', map_location=device))
+        model.eval()
         # create a transform function with autoencoder
         transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
         # run the analysis for adversarial approach
-        plot_cell_lines_clustering(path_to_drugs, path_to_controls, path_to_ae_model + 'new_cell_lines_clustering\\', transform)
-        plot_drugs_clustering(path_to_drugs, path_to_ae_model + 'new_drugs_clustering\\', transform)
+        plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_ae_model + 'new_cell_lines_clustering\\', transform)
+        plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_ae_model + 'new_drugs_clustering\\', transform)
         plot_full_data_umaps(path_to_drugs, path_to_ae_model + 'full_data_umaps\\', transform)
 
     if analyze_weakly_supervised:
         path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\dcl_at_100_0.7424\\'
         model = DeepClassifier().to(device)
         # load a trained deep classifier to use it in the transform
-        model.load_state_dict(torch.load(path_to_cl_model + 'deep_classifier.torch', map_location=device)).eval()
+        model.load_state_dict(torch.load(path_to_cl_model + 'deep_classifier.torch', map_location=device))
+        model.eval()
         # truncate to the layer with learned representations
         model = Sequential(*list(model.model.children())[:-4])
         # create a transform function with weakly supervised classifier
@@ -455,7 +458,8 @@ if __name__ == "__main__":
         path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\dcl+byol_at_17\\'
         model = DeepClassifier().to(device)
         # load a trained deep classifier to use it in the transform
-        model.load_state_dict(torch.load(path_to_cl_model + 'best_dcl+byol_at_16.torch', map_location=device)).eval()
+        model.load_state_dict(torch.load(path_to_cl_model + 'best_dcl+byol_at_16.torch', map_location=device))
+        model.eval()
         # truncate to the layer with learned representations
         model = Sequential(*list(model.model.children())[:-4])
         # create a transform function with weakly supervised classifier
