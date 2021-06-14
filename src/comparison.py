@@ -68,4 +68,3 @@ if __name__ == "__main__":
 
     plot_number_of_clusters('drugs', 30, save_to, filter_threshold=80)
     plot_number_of_clusters('cell_lines', 30, save_to, filter_threshold=80)
-
