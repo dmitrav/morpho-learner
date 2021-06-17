@@ -397,6 +397,89 @@ def plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls
                              path_to_control_images=path_to_controls)
 
 
+def plot_cell_line_clustering_with_random_cluster_composition(cell_line, min_cluster_size, path_to_drugs, path_to_controls, save_path, transform):
+
+    if not os.path.exists(save_path + cell_line):
+        os.makedirs(save_path + cell_line)
+
+    drugs_encodings, drugs_ids = get_image_encodings_from_path(path_to_drugs, cell_line, transform)
+    controls_encodings, controls_ids = get_image_encodings_from_path(path_to_controls, cell_line, transform, n=int(0.25 * len(drugs_encodings)))
+
+    encodings = numpy.array([*drugs_encodings, *controls_encodings])
+    drugs = [*drugs_ids['drugs'], *controls_ids['drugs']]
+    image_filenames = [*drugs_ids['filenames'], *controls_ids['filenames']]
+
+    reducer = umap.UMAP(n_neighbors=min_cluster_size, metric='euclidean')
+    start = time.time()
+    embedding = reducer.fit_transform(encodings)
+    print('umap transform with n = {}, took {} s'.format(min_cluster_size, int(time.time() - start)))
+
+    # cluster encodings
+    start = time.time()
+    clusterer = HDBSCAN(metric='euclidean', min_samples=1, min_cluster_size=min_cluster_size, allow_single_cluster=False)
+    clusterer.fit(embedding)
+    clusters = clusterer.labels_
+    print('hdbscan clustering with n = {}, took {} s'.format(min_cluster_size, int(time.time() - start)))
+
+    n_clusters = numpy.max(clusters) + 1
+    noise = int(numpy.sum(clusters == -1) / len(clusters) * 100)
+    print('clustering of cell line {}:\n'.format(cell_line))
+    print('min_cluster_size={}, min_samples=1, n clusters={}'.format(min_cluster_size, n_clusters))
+    print('noise={}%\n'.format(noise))
+
+    # filter out -1 ('noise') cluster
+    x, y = [], []
+    clusters_labels = []
+    drugs_labels = []
+    filenames = []
+    for i in range(embedding.shape[0]):
+        if clusters[i] != -1:
+            x.append(embedding[i, 0])
+            y.append(embedding[i, 1])
+            drugs_labels.append(drugs[i])
+            filenames.append(image_filenames[i])
+            clusters_labels.append(str(clusters[i]))
+
+    # save cluster representatives
+    save_cluster_members(path_to_drugs, filenames, clusters_labels, cell_line, save_path, path_to_control_images=path_to_controls)
+
+    # 136, 112, 14
+
+    for c in range(n_clusters):
+
+        hue = []
+        drugs_of_c = []
+        for i in range(len(clusters_labels)):
+            # plot highlighting only single cluster
+            if clusters_labels[i] == str(c):
+                hue.append("cluster {}".format(c))
+                drugs_of_c.append(drugs_labels[i])
+            else:
+                hue.append("other")
+
+        # plot umap
+        pyplot.figure()
+        seaborn.set(font_scale=0.5)
+        seaborn.color_palette('colorblind')
+        seaborn.axes_style('whitegrid')
+        seaborn.scatterplot(x=x, y=y, hue=hue, s=10)
+        pyplot.legend()
+        pyplot.title('{} UMAP: n={}, metric=euclidean'.format(cell_line, min_cluster_size), fontsize=8)
+        pyplot.savefig(save_path + '{}\\{}_umap_hue={}_n={}_metric=euclidean.pdf'.format(cell_line, cell_line, c, min_cluster_size), dpi=300)
+        pyplot.close()
+
+        # plot pie plot of cluster composition
+        drugs_names = list(set(drugs_of_c))
+        drugs_counts = [drugs_of_c.count(drug) for drug in drugs_names]
+
+        pyplot.figure()
+        pyplot.pie(drugs_counts, labels=drugs_names, wedgeprops=dict(width=0.5))
+        pyplot.title('Cluster {} composition'.format(c))
+        pyplot.tight_layout()
+        pyplot.savefig(save_path + '{}\\{}_pie_{}.pdf'.format(cell_line, cell_line, c), dpi=300)
+        pyplot.close()
+
+
 if __name__ == "__main__":
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
@@ -435,8 +518,13 @@ if __name__ == "__main__":
         transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
         # run the analysis for adversarial approach
-        plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_ae_model + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
-        plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_ae_model + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
+
+        plot_cell_line_clustering_with_random_cluster_composition('SW620', min_cluster_size, path_to_drugs, path_to_controls,
+                                                                  path_to_ae_model + 'umaps_with_pies\\'.format(min_cluster_size),
+                                                                  transform)
+
+        # plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_ae_model + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
+        # plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_ae_model + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
         # plot_full_data_umaps(path_to_drugs, path_to_ae_model + 'full_data_umaps\\', transform)
 
     if analyze_weakly_supervised:
