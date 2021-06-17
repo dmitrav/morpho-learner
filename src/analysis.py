@@ -490,7 +490,7 @@ if __name__ == "__main__":
     analyze_unsupervised = False
     analyze_weakly_supervised = False
     analyze_adversarial = False
-    analyze_self_supervised = False
+    analyze_self_supervised = True
 
     min_cluster_size = 30
 
@@ -555,6 +555,11 @@ if __name__ == "__main__":
         transform = lambda x: model(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
         # run the analysis for weakly supervised approach
-        plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_cl_model + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
-        plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_cl_model + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
+
+        plot_cell_line_clustering_with_random_cluster_composition('COLO205', min_cluster_size, path_to_drugs, path_to_controls,
+                                                                  path_to_cl_model + 'umaps_with_pies\\'.format(min_cluster_size),
+                                                                  transform)
+
+        # plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_cl_model + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
+        # plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_cl_model + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
         # plot_full_data_umaps(path_to_drugs, path_to_cl_model + 'full_data_umaps\\', transform)
