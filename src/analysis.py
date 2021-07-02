@@ -480,6 +480,54 @@ def plot_cell_line_clustering_with_random_cluster_composition(cell_line, min_clu
         pyplot.close()
 
 
+def get_f_transform(model):
+
+    if model == 'unsupervised':
+        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
+        model = Autoencoder().to(device)
+        # load a trained autoencoder to use it in the transform
+        model.load_state_dict(torch.load(path_to_ae_model + 'autoencoder.torch', map_location=device))
+        model.eval()
+        # create a transform function with autoencoder
+        transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+
+    elif model == 'self-supervised':
+        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\dcl+byol_at_17\\'
+        model = DeepClassifier().to(device)
+        # load a trained deep classifier to use it in the transform
+        model.load_state_dict(torch.load(path_to_cl_model + 'best_dcl+byol_at_16.torch', map_location=device))
+        model.eval()
+        # truncate to the layer with learned representations
+        model = Sequential(*list(model.model.children())[:-4])
+        # create a transform function with weakly supervised classifier
+        transform = lambda x: model(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+
+    elif model == 'weakly-supervised':
+        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\dcl_at_100_0.7424\\'
+        model = DeepClassifier().to(device)
+        # load a trained deep classifier to use it in the transform
+        model.load_state_dict(torch.load(path_to_cl_model + 'deep_classifier.torch', map_location=device))
+        model.eval()
+        # truncate to the layer with learned representations
+        model = Sequential(*list(model.model.children())[:-4])
+        # create a transform function with weakly supervised classifier
+        transform = lambda x: model(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+
+    elif model == 'adversarial':
+        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
+        model = Autoencoder().to(device)
+        # load a trained autoencoder to use it in the transform
+        model.load_state_dict(torch.load(path_to_ae_model + 'ae.torch', map_location=device))
+        model.eval()
+        # create a transform function with autoencoder
+        transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+
+    else:
+        raise ValueError("Unknown model.")
+
+    return transform
+
+
 if __name__ == "__main__":
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
@@ -496,12 +544,7 @@ if __name__ == "__main__":
 
     if analyze_unsupervised:
         path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
-        model = Autoencoder().to(device)
-        # load a trained autoencoder to use it in the transform
-        model.load_state_dict(torch.load(path_to_ae_model + 'autoencoder.torch', map_location=device))
-        model.eval()
-        # create a transform function with autoencoder
-        transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+        transform = get_f_transform('unsupervised')
 
         # run the analysis for unsupervised approach
         plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_ae_model + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
@@ -510,15 +553,9 @@ if __name__ == "__main__":
 
     if analyze_adversarial:
         path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
-        model = Autoencoder().to(device)
-        # load a trained autoencoder to use it in the transform
-        model.load_state_dict(torch.load(path_to_ae_model + 'ae.torch', map_location=device))
-        model.eval()
-        # create a transform function with autoencoder
-        transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+        transform = get_f_transform('adversarial')
 
         # run the analysis for adversarial approach
-
         plot_cell_line_clustering_with_random_cluster_composition('SW620', min_cluster_size, path_to_drugs, path_to_controls,
                                                                   path_to_ae_model + 'umaps_with_pies\\'.format(min_cluster_size),
                                                                   transform)
@@ -529,14 +566,7 @@ if __name__ == "__main__":
 
     if analyze_weakly_supervised:
         path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\dcl_at_100_0.7424\\'
-        model = DeepClassifier().to(device)
-        # load a trained deep classifier to use it in the transform
-        model.load_state_dict(torch.load(path_to_cl_model + 'deep_classifier.torch', map_location=device))
-        model.eval()
-        # truncate to the layer with learned representations
-        model = Sequential(*list(model.model.children())[:-4])
-        # create a transform function with weakly supervised classifier
-        transform = lambda x: model(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+        transform = get_f_transform('weakly-supervised')
 
         # run the analysis for weakly supervised approach
         plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_cl_model + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
@@ -545,17 +575,9 @@ if __name__ == "__main__":
 
     if analyze_self_supervised:
         path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\dcl+byol_at_17\\'
-        model = DeepClassifier().to(device)
-        # load a trained deep classifier to use it in the transform
-        model.load_state_dict(torch.load(path_to_cl_model + 'best_dcl+byol_at_16.torch', map_location=device))
-        model.eval()
-        # truncate to the layer with learned representations
-        model = Sequential(*list(model.model.children())[:-4])
-        # create a transform function with weakly supervised classifier
-        transform = lambda x: model(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
+        transform = get_f_transform('self-supervised')
 
         # run the analysis for weakly supervised approach
-
         plot_cell_line_clustering_with_random_cluster_composition('COLO205', min_cluster_size, path_to_drugs, path_to_controls,
                                                                   path_to_cl_model + 'umaps_with_pies\\'.format(min_cluster_size),
                                                                   transform)

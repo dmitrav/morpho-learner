@@ -1,7 +1,10 @@
-import pandas, os, seaborn
+import pandas, os, seaborn, numpy, umap, time
 from matplotlib import pyplot
+from tqdm import tqdm
+from hdbscan import HDBSCAN
 
 from src.constants import cell_lines, drugs
+from src import analysis
 
 
 def plot_number_of_clusters(key, mcs, save_to, filter_threshold=4):
@@ -59,12 +62,50 @@ def plot_number_of_clusters(key, mcs, save_to, filter_threshold=4):
     pyplot.savefig(save_to + plot_title.replace(' ', '_') + '_mcs={}.pdf'.format(mcs))
 
 
+def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drugs, save_to):
+
+    results = {'drug': [], 'model': [], 'min_cluster_size': [], 'n_clusters': [], 'noise': []}
+
+    for drug in tqdm(drugs):
+        for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'adversarial']:
+
+            transform = analysis.get_f_transform(model)
+            encodings, image_ids = analysis.get_image_encodings_from_path(path_to_drugs, drug, transform)
+            encodings = numpy.array(encodings)
+
+            for min_cluster_size in tqdm(range(10, 310, 10)):
+
+                start = time.time()
+                reducer = umap.UMAP(n_neighbors=min_cluster_size, metric='euclidean')
+                embedding = reducer.fit_transform(encodings)
+                # cluster encodings
+                clusterer = HDBSCAN(metric='euclidean', min_samples=1, min_cluster_size=min_cluster_size, allow_single_cluster=False)
+                clusterer.fit(embedding)
+                clusters = clusterer.labels_
+                print('umap + hdbscan clustering with n = {}, took {} s'.format(min_cluster_size, int(time.time() - start)))
+
+                n_clusters = numpy.max(clusters) + 1
+                noise = int(numpy.sum(clusters == -1) / len(clusters) * 100)
+
+                results['drug'].append(drug)
+                results['model'].append(model)
+                results['min_cluster_size'].append(min_cluster_size)
+                results['n_clusters'].append(n_clusters)
+                results['noise'].append(noise)
+
+    results = pandas.DataFrame(results)
+    results.to_csv(save_to + 'clustering_over_parameter_sets.csv', index=False)
+
+
 if __name__ == "__main__":
 
     save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\'
 
-    plot_number_of_clusters('drugs', 300, save_to, filter_threshold=4)
-    plot_number_of_clusters('cell_lines', 300, save_to, filter_threshold=4)
+    # plot_number_of_clusters('drugs', 300, save_to, filter_threshold=4)
+    # plot_number_of_clusters('cell_lines', 300, save_to, filter_threshold=4)
+    # plot_number_of_clusters('drugs', 30, save_to, filter_threshold=80)
+    # plot_number_of_clusters('cell_lines', 30, save_to, filter_threshold=80)
 
-    plot_number_of_clusters('drugs', 30, save_to, filter_threshold=80)
-    plot_number_of_clusters('cell_lines', 30, save_to, filter_threshold=80)
+    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
+
+    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drugs, save_to)
