@@ -1,4 +1,5 @@
 import pandas, os, seaborn, numpy, umap, time
+import torch
 from matplotlib import pyplot
 from tqdm import tqdm
 from hdbscan import HDBSCAN
@@ -69,7 +70,7 @@ def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drug
     for drug in tqdm(drugs):
         for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'adversarial']:
 
-            transform = analysis.get_f_transform(model)
+            transform = analysis.get_f_transform(model, torch.device('cuda'))
             encodings, image_ids = analysis.get_image_encodings_from_path(path_to_drugs, drug, transform)
             encodings = numpy.array(encodings)
 
