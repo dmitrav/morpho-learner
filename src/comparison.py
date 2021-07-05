@@ -16,7 +16,10 @@ def plot_number_of_clusters(key, mcs, save_to, filter_threshold=4):
     """
 
     if key == 'drugs':
-        all_names = drugs
+        # all_names = drugs
+        all_names = ['Clofarabine', 'Pemetrexed', 'Irinotecan', 'Docetaxel',
+                     'Trametinib', 'Rapamycin', 'Paclitaxel', 'Methotrexate']
+
     elif key == 'cell_lines':
         all_names = cell_lines
     else:
@@ -42,23 +45,26 @@ def plot_number_of_clusters(key, mcs, save_to, filter_threshold=4):
                 names.append(name)
                 methods.append(method)
 
-    results = pandas.DataFrame({'method': methods, 'name': names, 'N': n_clusters})
-    results = results.sort_values('N')
+    results = pandas.DataFrame({'method': methods, 'name': names, 'Number of clusters': n_clusters})
+    results = results.sort_values('Number of clusters')
 
     if filter_threshold > 0:
         for name in all_names:
-            name_sum = results.loc[results['name'] == name, 'N'].sum()
+            name_sum = results.loc[results['name'] == name, 'Number of clusters'].sum()
             if name_sum < filter_threshold * len(model_paths):
                 # if all methods have less than 4 clusters, filter out this name
                 results = results.drop(results[results['name'] == name].index)
 
     plot_title = "Clustering of {}".format(key.replace('_', ' '))
-    pyplot.figure(figsize=(12,6))
+    # pyplot.figure(figsize=(12,6))
+    # pyplot.figure(figsize=(10,6))
     seaborn.set_theme(style="whitegrid")
-    seaborn.barplot(x='name', y='N', hue='method', data=results)
-    pyplot.title(plot_title)
+    seaborn.barplot(x='name', y='Number of clusters', hue='method', data=results)
+    # pyplot.title(plot_title)
     pyplot.xticks(rotation=45)
-    pyplot.legend(bbox_to_anchor=(1.01, 1))
+    pyplot.ylim(0, 19)
+    pyplot.yticks([x for x in range(0, 13, 2)])
+    # pyplot.legend(bbox_to_anchor=(1.01, 1))
     pyplot.tight_layout()
     pyplot.savefig(save_to + plot_title.replace(' ', '_') + '_mcs={}.pdf'.format(mcs))
 
@@ -68,34 +74,38 @@ def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drug
     results = {'drug': [], 'model': [], 'min_cluster_size': [], 'n_clusters': [], 'noise': []}
 
     for drug in tqdm(drugs):
-        for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'adversarial']:
 
-            transform = analysis.get_f_transform(model, torch.device('cuda'))
-            encodings, image_ids = analysis.get_image_encodings_from_path(path_to_drugs, drug, transform)
-            encodings = numpy.array(encodings)
+        if drug in ['PBS', 'DMSO']:
+            continue
+        else:
+            for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'adversarial']:
 
-            for min_cluster_size in tqdm(range(10, 310, 10)):
+                transform = analysis.get_f_transform(model, torch.device('cuda'))
+                encodings, image_ids = analysis.get_image_encodings_from_path(path_to_drugs, drug, transform)
+                encodings = numpy.array(encodings)
 
-                start = time.time()
-                reducer = umap.UMAP(n_neighbors=min_cluster_size, metric='euclidean')
-                embedding = reducer.fit_transform(encodings)
-                # cluster encodings
-                clusterer = HDBSCAN(metric='euclidean', min_samples=1, min_cluster_size=min_cluster_size, allow_single_cluster=False)
-                clusterer.fit(embedding)
-                clusters = clusterer.labels_
-                print('umap + hdbscan clustering with n = {}, took {} s'.format(min_cluster_size, int(time.time() - start)))
+                for min_cluster_size in tqdm(range(50, 510, 50)):
 
-                n_clusters = numpy.max(clusters) + 1
-                noise = int(numpy.sum(clusters == -1) / len(clusters) * 100)
+                    start = time.time()
+                    reducer = umap.UMAP(n_neighbors=min_cluster_size, metric='euclidean')
+                    embedding = reducer.fit_transform(encodings)
+                    # cluster encodings
+                    clusterer = HDBSCAN(metric='euclidean', min_samples=1, min_cluster_size=min_cluster_size, allow_single_cluster=False)
+                    clusterer.fit(embedding)
+                    clusters = clusterer.labels_
+                    print('umap + hdbscan clustering with n = {}, took {} s'.format(min_cluster_size, int(time.time() - start)))
 
-                results['drug'].append(drug)
-                results['model'].append(model)
-                results['min_cluster_size'].append(min_cluster_size)
-                results['n_clusters'].append(n_clusters)
-                results['noise'].append(noise)
+                    n_clusters = numpy.max(clusters) + 1
+                    noise = int(numpy.sum(clusters == -1) / len(clusters) * 100)
+
+                    results['drug'].append(drug)
+                    results['model'].append(model)
+                    results['min_cluster_size'].append(min_cluster_size)
+                    results['n_clusters'].append(n_clusters)
+                    results['noise'].append(noise)
 
     results = pandas.DataFrame(results)
-    results.to_csv(save_to + 'clustering_over_parameter_sets.csv', index=False)
+    results.to_csv(save_to + 'clusters_over_min_cluster_size.csv', index=False)
 
 
 if __name__ == "__main__":
