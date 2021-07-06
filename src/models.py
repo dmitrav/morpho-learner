@@ -2,6 +2,7 @@ import torch, numpy, pandas
 from torch import nn, optim
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import StandardScaler, RobustScaler
+from src.constants import drugs
 
 
 class Autoencoder(nn.Module):
@@ -63,6 +64,26 @@ class Classifier(nn.Module):
             nn.Linear(2048, 256),
             nn.LeakyReLU(),
             nn.Linear(256, n_classes),
+            nn.Softmax(dim=1)
+        )
+
+        print(self)
+        print('number of parameters: {}\n'.format(self.count_parameters()))
+
+    def forward(self, features):
+        return self.model(features)
+
+    def count_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+
+class DrugClassifier(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+        self.model = nn.Sequential(
+            nn.Linear(2048, len(drugs)),
             nn.Softmax(dim=1)
         )
 

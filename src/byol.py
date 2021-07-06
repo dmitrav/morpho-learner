@@ -15,9 +15,9 @@ from vit_pytorch import ViT, Dino
 from vit_pytorch.recorder import Recorder
 
 from src.models import Autoencoder, Classifier, DeepClassifier
-from src.trainer import CustomImageDataset, JointImageDataset
+# from src.trainer import CustomImageDataset, JointImageDataset
 from src.constants import vit_par_types
-from src.trainer import plot_reconstruction, train_together, train_autoencoder, train_classifier_with_pretrained_encoder
+from src.trainer import plot_reconstruction, train_together, train_autoencoder
 from src.trainer import train_deep_classifier_weakly
 from src.analysis import plot_drugs_clustering, plot_cell_lines_clustering
 

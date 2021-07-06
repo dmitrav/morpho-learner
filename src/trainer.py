@@ -8,7 +8,8 @@ import torch.multiprocessing as mp
 from PIL import Image
 
 from src.models import Autoencoder, Classifier, DeepClassifier
-from src import byol, constants
+# from src.byol import run_training_for_64x64_cuts
+from src import constants
 
 
 class CustomImageDataset(Dataset):
@@ -437,52 +438,6 @@ def train_autoencoder(epochs, trained_ae=None, batch_size=256, device=torch.devi
     torch.save(model.state_dict(), save_path + 'autoencoder.torch')
 
 
-def train_classifier_with_pretrained_encoder(epochs, trained_ae, batch_size=256, deep=False):
-
-    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
-    path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
-    save_path = 'D:\ETH\projects\morpho-learner\\res\\cl\\'
-
-    device = torch.device('cuda')
-
-    N = 380000  # ~90%
-    transform = lambda x: trained_ae.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
-
-    training_drugs = CustomImageDataset(path_to_drugs, 0, transform=transform)
-    training_drugs, the_rest = torch.utils.data.random_split(training_drugs, [N, training_drugs.__len__() - N])
-    validation_drugs, _ = torch.utils.data.random_split(the_rest, [N // 2, the_rest.__len__() - N // 2])
-
-    training_controls = CustomImageDataset(path_to_controls, 1, transform=transform)
-    training_controls, the_rest = torch.utils.data.random_split(training_controls, [N, training_controls.__len__() - N])
-    validation_controls, _ = torch.utils.data.random_split(the_rest, [N // 2, the_rest.__len__() - N // 2])
-
-    loader_train_drugs = DataLoader(training_drugs, batch_size=batch_size, shuffle=True)
-    loader_train_controls = DataLoader(training_controls, batch_size=batch_size, shuffle=True)
-    loader_val_drugs = DataLoader(validation_drugs, batch_size=batch_size, shuffle=True)
-    loader_val_controls = DataLoader(validation_controls, batch_size=batch_size, shuffle=True)
-
-    if deep:
-        model = DeepClassifier().to(device)
-    else:
-        model = Classifier().to(device)
-
-    optimizer = optim.Adam(model.parameters(), lr=0.0004)
-    # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 50, 80], gamma=0.3)
-    criterion = nn.CrossEntropyLoss()
-
-    last_epoch_acc = run_weakly_supervised_classifier_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
-                                                               model, optimizer, criterion, device, epochs=epochs)
-    if deep:
-        save_path = save_path.replace('cl', 'dcl_{}'.format(round(last_epoch_acc, 4)))
-    else:
-        save_path = save_path.replace('cl', 'cl_{}'.format(round(last_epoch_acc, 4)))
-
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-
-    torch.save(model.state_dict(), save_path + 'classifier.torch')
-
-
 def train_deep_classifier_weakly(epochs, trained_cl=None, batch_size=256, device=torch.device('cuda')):
 
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
@@ -532,8 +487,8 @@ def train_deep_classifier(epochs, trained_cl=None, batch_size=256, device=torch.
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
     save_path = 'D:\ETH\projects\morpho-learner\\res\\dcl-super\\'
 
-    Nd, Nc = 380000, 330000  # ~89% of drugs
     transform = lambda x: x / 255.
+    Nd, Nc = 380000, 330000  # ~89% of drugs
 
     training_drugs = CustomImageDataset(path_to_drugs, -1, transform=transform)
     training_drugs, the_rest = torch.utils.data.random_split(training_drugs, [Nd, training_drugs.__len__() - Nd])
@@ -666,7 +621,7 @@ if __name__ == "__main__":
     if train_cl_with_byol:
 
         cl = DeepClassifier().to(device)
-        byol.run_training_for_64x64_cuts(cl, 100, device)
+        run_training_for_64x64_cuts(cl, 100, device)
 
     if train_cl_supervised:
 
