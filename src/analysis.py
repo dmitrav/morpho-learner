@@ -583,5 +583,5 @@ if __name__ == "__main__":
                                                                   transform)
 
         # plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_cl_model + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
-        # plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_cl_model + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
+        plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_cl_model + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
         # plot_full_data_umaps(path_to_drugs, path_to_cl_model + 'full_data_umaps\\', transform)
