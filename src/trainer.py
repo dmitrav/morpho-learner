@@ -4,92 +4,11 @@ from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
 from torchvision.io import read_image
 from torchmetrics import Accuracy
-import torch.multiprocessing as mp
-from PIL import Image
 
 from src.models import Autoencoder, Classifier, DeepClassifier
-# from src.byol import run_training_for_64x64_cuts
+from src.byol import run_training_for_64x64_cuts
+from src.datasets import CustomImageDataset, JointImageDataset
 from src import constants
-
-
-class CustomImageDataset(Dataset):
-
-    def __init__(self, img_dir, label, transform=None, target_transform=None):
-        self.img_dir = img_dir
-        self.transform = transform
-        self.target_transform = target_transform
-
-        if label > 0:
-            self.img_labels = pandas.DataFrame({
-                'img': [f for f in os.listdir(img_dir)],
-                'label': [label for f in os.listdir(img_dir)]
-            })
-        else:
-            self.img_labels = pandas.DataFrame({
-                'img': [f for f in os.listdir(img_dir)],
-                'label': [self._infer_label(f) for f in os.listdir(img_dir)]
-            })
-
-    def __len__(self):
-        return len(self.img_labels)
-
-    def __getitem__(self, idx):
-        img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
-        image = read_image(img_path)
-        label = self.img_labels.iloc[idx, 1]
-        if self.transform:
-            image = self.transform(image)
-        if self.target_transform:
-            label = self.target_transform(label)
-        sample = (image, label)
-        return sample
-
-    def _infer_label(self, filename):
-        """ This method infers drugs labels from the filenames. """
-
-        mapper = dict(zip(constants.drugs, [x for x in range(len(constants.drugs))]))
-        self.n_classes = len(constants.drugs)
-
-        for drug in constants.drugs:
-            if drug in filename:
-                return mapper[drug]
-
-
-class JointImageDataset(Dataset):
-    def __init__(self, datasets, transform=None, target_transform=None, n_channels=1):
-
-        for subset in datasets:
-            subset.dataset.img_labels.insert(0, 'path', subset.dataset.img_dir)
-
-        self.img_labels = pandas.concat([subset.dataset.img_labels for subset in datasets])
-        self.transform = transform
-        self.target_transform = target_transform
-        self.n_channels = n_channels
-        self.n_classes = sum([subset.dataset.n_classes for subset in datasets])
-
-    def __len__(self):
-        return len(self.img_labels)
-
-    def __getitem__(self, idx):
-        img_path = os.path.join(self.img_labels.iloc[idx, 0], self.img_labels.iloc[idx, 1])
-
-        if self.n_channels == 3:
-            # read 3 channels
-            image = numpy.array(Image.open(img_path).convert('RGB'))
-            image = numpy.moveaxis(image, -1, 0)  # set channels as the first dim
-            image = torch.Tensor(image)
-        elif self.n_channels == 1:
-            image = read_image(img_path)
-        else:
-            raise ValueError()
-
-        label = self.img_labels.iloc[idx, 2]
-        if self.transform:
-            image = self.transform(image)
-        if self.target_transform:
-            label = self.target_transform(label)
-        sample = (image, label)
-        return sample
 
 
 def run_autoencoder_training(data_loader_train, data_loader_test, model, optimizer, criterion, device, lr_scheduler=None, epochs=10):
@@ -204,11 +123,11 @@ def run_weakly_supervised_classifier_training(loader_train_drugs, loader_train_c
     return acc
 
 
-def run_supervised_classifier_training(loader_train, loader_val, model, optimizer, criterion, device,
-                                       lr_scheduler=None, epochs=10):
+def run_supervised_classifier_training(loader_train, model, optimizer, criterion, device,
+                                       lr_scheduler=None, epochs=10, test_loader=None):
     f_acc = Accuracy().to(device)
-
-    train_acc, val_acc = 0, 0
+    print("training started...")
+    train_acc, val_acc = 0, -1
     for epoch in range(epochs):
 
         start = time.time()
@@ -238,21 +157,22 @@ def run_supervised_classifier_training(loader_train, loader_val, model, optimize
         # compute epoch training accuracy
         train_acc = train_acc / len(loader_train)
 
-        val_acc = 0
-        for batch_features, batch_labels in loader_val:
-            batch_features = batch_features.float().to(device)
-            outputs = model(batch_features)
-            val_acc += float(f_acc(outputs, batch_labels.to(device)))
-        # compute epoch training accuracy
-        val_acc = val_acc / len(loader_val)
+        if test_loader is not None:
+            val_acc = 0
+            for batch_features, batch_labels in test_loader:
+                batch_features = batch_features.float().to(device)
+                outputs = model(batch_features)
+                val_acc += float(f_acc(outputs, batch_labels.to(device)))
+            # compute epoch training accuracy
+            val_acc = val_acc / len(test_loader)
 
         # update lr
         if lr_scheduler is not None:
             lr_scheduler.step()
 
         # display the epoch training loss
-        print("epoch {}/{}: {} min, loss = {:.4f}, train_acc = {:.4f}, val_acc = {:.4f}"
-              .format(epoch + 1, epochs, int((time.time() - start) / 60), loss, train_acc, val_acc))
+        print("epoch {}/{}: {} sec, loss = {:.4f}, train_acc = {:.4f}, val_acc = {:.4f}"
+              .format(epoch + 1, epochs, int(time.time() - start), loss, train_acc, val_acc))
 
     return train_acc, val_acc
 
@@ -519,9 +439,8 @@ if __name__ == "__main__":
 
     train_ae_alone = False  # convolutional autoencoder
     train_cl_weakly = False  # weakly supervised classifier
-    train_both_weakly = False  # autoencoder + weakly supervised classifier (2 classes)
+    train_both_weakly = True  # autoencoder + weakly supervised classifier (2 classes)
     train_cl_with_byol = False  # train cl with self-supervision as in BYOL
-    train_cl_supervised = True  # train classifier with 684 classes
 
     device = torch.device('cuda')
 
@@ -561,7 +480,3 @@ if __name__ == "__main__":
 
         cl = DeepClassifier().to(device)
         run_training_for_64x64_cuts(cl, 100, device)
-
-    if train_cl_supervised:
-
-        train_deep_classifier(60, batch_size=512, device=device)

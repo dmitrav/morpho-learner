@@ -1,25 +1,12 @@
 
-from byol_pytorch import BYOL
-from torchvision import models
 
 import os, pandas, time, torch, numpy, uuid, seaborn, random, shutil, traceback
 from PIL import Image
 from matplotlib import pyplot
-from tqdm import tqdm
-from torch import nn, optim
+from byol_pytorch import BYOL
 from torch.utils.data import Dataset, DataLoader
-from torchvision.io import read_image
-import torch.multiprocessing as mp
-from torch.nn import Sequential
-from vit_pytorch import ViT, Dino
-from vit_pytorch.recorder import Recorder
 
-from src.models import Autoencoder, Classifier, DeepClassifier
-# from src.trainer import CustomImageDataset, JointImageDataset
-from src.constants import vit_par_types
-from src.trainer import plot_reconstruction, train_together, train_autoencoder
-from src.trainer import train_deep_classifier_weakly
-from src.analysis import plot_drugs_clustering, plot_cell_lines_clustering
+from src.datasets import CustomImageDataset, JointImageDataset
 
 
 def get_byol_pars(im_size, randomize=True):
@@ -192,6 +179,4 @@ if __name__ == '__main__':
 
     # TODO:
     #  - try weight decay,
-    #  - try Lars optimizer and full BYOL paper set-up,
-    #  - train classifier on top of learned representations,
-    #  - repeat the analysis for learned representations
+    #  - try Lars optimizer and full BYOL paper set-up
