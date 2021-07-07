@@ -108,15 +108,27 @@ def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drug
     results.to_csv(save_to + 'clusters_over_min_cluster_size.csv', index=False)
 
 
+def plot_distribution_of_clusters():
+
+    clustering_results = pandas.read_csv('D:\ETH\projects\morpho-learner\\res\comparison\clusters_over_min_cluster_size.csv')
+    clustering_results = clustering_results.loc[clustering_results['min_cluster_size'] <= 300, :]
+
+    seaborn.set_theme(style="whitegrid")
+    seaborn.displot(clustering_results, x='n_clusters', hue='model', multiple="dodge", binwidth=10)
+    pyplot.xlabel('Number of clusters')
+    pyplot.savefig('D:\ETH\projects\morpho-learner\\res\comparison\clusters_over_min_cluster_size.pdf')
+
+
 if __name__ == "__main__":
 
     save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\'
+    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
 
     # plot_number_of_clusters('drugs', 300, save_to, filter_threshold=4)
     # plot_number_of_clusters('cell_lines', 300, save_to, filter_threshold=4)
     # plot_number_of_clusters('drugs', 30, save_to, filter_threshold=80)
     # plot_number_of_clusters('cell_lines', 30, save_to, filter_threshold=80)
 
-    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
+    # collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drugs, save_to)
 
-    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drugs, save_to)
+    plot_distribution_of_clusters()
