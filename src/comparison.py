@@ -70,10 +70,10 @@ def plot_number_of_clusters(key, mcs, save_to, filter_threshold=4):
     pyplot.savefig(save_to + plot_title.replace(' ', '_') + '_mcs={}.pdf'.format(mcs))
 
 
-def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drugs, save_to):
+def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drugs, range_with_step, save_to):
     """ Cluster the dataset over multiple parameters, evaluate results and save results as a dataframe. """
 
-    results = {'drug': [], 'model': [], 'min_cluster_size': [], 'n_clusters': [],
+    results = {'drug': [], 'method': [], 'min_cluster_size': [], 'n_clusters': [],
                'noise': [], 'silhouette': [], 'calinski_harabasz': [], 'davies_bouldin': []}
 
     for drug in tqdm(drugs):
@@ -87,7 +87,7 @@ def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drug
                 encodings, image_ids = analysis.get_image_encodings_from_path(path_to_drugs, drug, transform)
                 encodings = numpy.array(encodings)
 
-                for min_cluster_size in tqdm(range(30, 310, 30)):
+                for min_cluster_size in tqdm(range(*range_with_step)):
 
                     start = time.time()
                     reducer = umap.UMAP(n_neighbors=min_cluster_size, metric='euclidean')
@@ -105,7 +105,7 @@ def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drug
                     davies_bouldin = metrics.davies_bouldin_score(embedding, clusters)
 
                     results['drug'].append(drug)
-                    results['model'].append(model)
+                    results['method'].append(model)
                     results['min_cluster_size'].append(min_cluster_size)
                     results['n_clusters'].append(n_clusters)
                     results['noise'].append(noise)
@@ -122,7 +122,8 @@ def plot_full_distribution_of_clusters(clustering_results, save_to):
     seaborn.set_theme(style="whitegrid")
     seaborn.displot(clustering_results, x='n_clusters', hue='method', multiple="dodge", binwidth=10)
     pyplot.xlabel('Number of clusters')
-    pyplot.savefig(save_to + 'clusters_over_min_cluster_size.pdf')
+    pyplot.savefig(save_to + 'full_cluster_distribution.pdf')
+    pyplot.close()
 
 
 def select_the_best_clustering_results(clustering_results):
@@ -133,7 +134,7 @@ def select_the_best_clustering_results(clustering_results):
         scipy.stats.pearsonr(clustering_results.loc[:, 'silhouette'], clustering_results.loc[:, 'davies_bouldin'])[0]))
 
     best_clustering = pandas.DataFrame(columns=clustering_results.columns)
-    for method in methods:
+    for method in ['unsupervised', 'self-supervised', 'weakly-supervised', 'adversarial']:
         for drug in drugs:
             df = clustering_results.loc[(clustering_results['drug'] == drug) & (clustering_results['method'] == method), :]
             # select the best results by three metrics:
@@ -163,6 +164,7 @@ def print_statistics_on_clustering_results(clustering_results):
 
 
 def plot_distributions_of_best_clustering_results(best_clustering, save_to):
+
     for drug in drugs:
         # filter out drugs where best clustering failed
         drug_clusters = best_clustering.loc[best_clustering['drug'] == drug, :]
@@ -171,9 +173,9 @@ def plot_distributions_of_best_clustering_results(best_clustering, save_to):
 
     best_clustering['n_clusters'] = best_clustering['n_clusters'].astype('int')
     seaborn.kdeplot(data=best_clustering, x='n_clusters', hue='method', fill=True, alpha=0.5)
-    pyplot.grid()
     pyplot.tight_layout()
     pyplot.savefig(save_to + 'best_clustering_dist.pdf')
+    pyplot.close()
 
 
 def plot_n_clusters_for_selected_drugs(best_clustering, save_to):
@@ -181,29 +183,27 @@ def plot_n_clusters_for_selected_drugs(best_clustering, save_to):
     selected = ['Clofarabine', 'Lenvatinib', 'Irinotecan', 'Metformin', 'Topotecan', 'Rapamycin', 'Gemcitabine', 'Paclitaxel', 'Omacetaxine']
     best_clustering = best_clustering.loc[numpy.isin(best_clustering['drug'], selected), :]
 
-    pyplot.figure()
     seaborn.barplot(x='drug', y='n_clusters', hue='method', data=best_clustering)
     pyplot.xticks(rotation=45)
     pyplot.xlabel('')
     pyplot.ylabel('Number of clusters')
-    pyplot.grid()
     pyplot.tight_layout()
     pyplot.savefig(save_to + 'best_clustering_drugs.pdf')
+    pyplot.close()
 
 
 if __name__ == "__main__":
 
     save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\'
-    run_clustering_grid = False
+    run_clustering_grid = True
 
     if run_clustering_grid:
         # run clustering over many parameter sets and save results
         path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
-        collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drugs, save_to)
+        collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drugs, (10, 51, 10), save_to)
 
     # read results of clustering
     clustering_results = pandas.read_csv(save_to + 'clusters_over_min_cluster_size.csv')
-    clustering_results = clustering_results.rename(columns={'model': 'method'})
 
     # analyze full results
     print_statistics_on_clustering_results(clustering_results)
