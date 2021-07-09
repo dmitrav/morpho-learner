@@ -174,5 +174,7 @@ if __name__ == '__main__':
     results = {}
     for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'adversarial']:
         acc, val_acc = train_classifier_with_pretrained_encoder(100, model, 1024)
-        results[model] = (acc, val_acc)
-    print(results)
+        results[model] = (round(acc,3), round(val_acc,3))
+
+    for key in results:
+        print('{}: {}'.format(key, results[key]))

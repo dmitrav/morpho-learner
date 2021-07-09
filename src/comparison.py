@@ -1,6 +1,7 @@
-import pandas, os, seaborn, numpy, umap, time
-import torch
+import pandas, os, seaborn, numpy, umap, time, torch, scipy
+from sklearn import metrics
 from matplotlib import pyplot
+from torchmetrics import metric
 from tqdm import tqdm
 from hdbscan import HDBSCAN
 
@@ -9,7 +10,7 @@ from src import analysis
 
 
 def plot_number_of_clusters(key, mcs, save_to, filter_threshold=4):
-    """
+    """ Evaluate clustering made previously for certain parameters.
     :param key: 'drugs' or 'cell_lines'
     :param mcs: min_cluster_size used to cluster
     :param filter_threshold: filter out cell lines / drugs that had less clusters than value
@@ -70,8 +71,10 @@ def plot_number_of_clusters(key, mcs, save_to, filter_threshold=4):
 
 
 def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drugs, save_to):
+    """ Cluster the dataset over multiple parameters, evaluate results and save results as a dataframe. """
 
-    results = {'drug': [], 'model': [], 'min_cluster_size': [], 'n_clusters': [], 'noise': []}
+    results = {'drug': [], 'model': [], 'min_cluster_size': [], 'n_clusters': [],
+               'noise': [], 'silhouette': [], 'calinski_harabasz': [], 'davies_bouldin': []}
 
     for drug in tqdm(drugs):
 
@@ -84,7 +87,7 @@ def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drug
                 encodings, image_ids = analysis.get_image_encodings_from_path(path_to_drugs, drug, transform)
                 encodings = numpy.array(encodings)
 
-                for min_cluster_size in tqdm(range(50, 510, 50)):
+                for min_cluster_size in tqdm(range(30, 310, 30)):
 
                     start = time.time()
                     reducer = umap.UMAP(n_neighbors=min_cluster_size, metric='euclidean')
@@ -97,38 +100,117 @@ def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drug
 
                     n_clusters = numpy.max(clusters) + 1
                     noise = int(numpy.sum(clusters == -1) / len(clusters) * 100)
+                    silhouette = metrics.silhouette_score(embedding, clusters)
+                    calinski_harabasz = metrics.calinski_harabasz_score(embedding, clusters)
+                    davies_bouldin = metrics.davies_bouldin_score(embedding, clusters)
 
                     results['drug'].append(drug)
                     results['model'].append(model)
                     results['min_cluster_size'].append(min_cluster_size)
                     results['n_clusters'].append(n_clusters)
                     results['noise'].append(noise)
+                    results['silhouette'].append(silhouette)
+                    results['calinski_harabasz'].append(calinski_harabasz)
+                    results['davies_bouldin'].append(davies_bouldin)
 
     results = pandas.DataFrame(results)
     results.to_csv(save_to + 'clusters_over_min_cluster_size.csv', index=False)
 
 
-def plot_distribution_of_clusters():
-
-    clustering_results = pandas.read_csv('D:\ETH\projects\morpho-learner\\res\comparison\clusters_over_min_cluster_size.csv')
-    clustering_results = clustering_results.loc[clustering_results['min_cluster_size'] <= 300, :]
+def plot_full_distribution_of_clusters(clustering_results, save_to):
 
     seaborn.set_theme(style="whitegrid")
-    seaborn.displot(clustering_results, x='n_clusters', hue='model', multiple="dodge", binwidth=10)
+    seaborn.displot(clustering_results, x='n_clusters', hue='method', multiple="dodge", binwidth=10)
     pyplot.xlabel('Number of clusters')
-    pyplot.savefig('D:\ETH\projects\morpho-learner\\res\comparison\clusters_over_min_cluster_size.pdf')
+    pyplot.savefig(save_to + 'clusters_over_min_cluster_size.pdf')
+
+
+def select_the_best_clustering_results(clustering_results):
+
+    # find uncorrelated metrics for further evaluations
+    print("corr(silhouette, calinski_harabasz) = {}\ncorr(silhouette, davies_bouldin) = {}".format(
+        scipy.stats.pearsonr(clustering_results.loc[:, 'silhouette'], clustering_results.loc[:, 'calinski_harabasz'])[0],
+        scipy.stats.pearsonr(clustering_results.loc[:, 'silhouette'], clustering_results.loc[:, 'davies_bouldin'])[0]))
+
+    best_clustering = pandas.DataFrame(columns=clustering_results.columns)
+    for method in methods:
+        for drug in drugs:
+            df = clustering_results.loc[(clustering_results['drug'] == drug) & (clustering_results['method'] == method), :]
+            # select the best results by three metrics:
+            df = df[df['silhouette'] >= df['silhouette'].median()]
+            df = df[df['davies_bouldin'] <= df['davies_bouldin'].median()]
+            df = df[df['noise'] == df['noise'].min()]
+            if df.shape[0] > 1:
+                # if there are multiple equivalent results, take more clusters
+                df = df[df['n_clusters'] == df['n_clusters'].max()]
+            best_clustering = pandas.concat([best_clustering, df])
+
+    return best_clustering
+
+
+def print_statistics_on_clustering_results(clustering_results):
+
+    for method in ['unsupervised', 'self-supervised', 'weakly-supervised', 'adversarial']:
+        print(
+            "{}:\nmean (median) n_clusters = {} ({})\nmedian noise = {}%\nmax silhouette = {}\nmin davies_bouldin = {}\n".format(
+                method,
+                int(clustering_results.loc[clustering_results['method'] == method, "n_clusters"].mean()),
+                int(clustering_results.loc[clustering_results['method'] == method, "n_clusters"].median()),
+                int(clustering_results.loc[clustering_results['method'] == method, "noise"].median()),
+                round(clustering_results.loc[clustering_results['method'] == method, "silhouette"].max(), 3),
+                round(clustering_results.loc[clustering_results['method'] == method, "davies_bouldin"].min(), 3)
+            ))
+
+
+def plot_distributions_of_best_clustering_results(best_clustering, save_to):
+    for drug in drugs:
+        # filter out drugs where best clustering failed
+        drug_clusters = best_clustering.loc[best_clustering['drug'] == drug, :]
+        if drug_clusters['n_clusters'].sum() <= 8 or drug_clusters['n_clusters'].sum() >= 80:
+            best_clustering = best_clustering.drop(best_clustering[best_clustering['drug'] == drug].index)
+
+    best_clustering['n_clusters'] = best_clustering['n_clusters'].astype('int')
+    seaborn.kdeplot(data=best_clustering, x='n_clusters', hue='method', fill=True, alpha=0.5)
+    pyplot.grid()
+    pyplot.tight_layout()
+    pyplot.savefig(save_to + 'best_clustering_dist.pdf')
+
+
+def plot_n_clusters_for_selected_drugs(best_clustering, save_to):
+
+    selected = ['Clofarabine', 'Lenvatinib', 'Irinotecan', 'Metformin', 'Topotecan', 'Rapamycin', 'Gemcitabine', 'Paclitaxel', 'Omacetaxine']
+    best_clustering = best_clustering.loc[numpy.isin(best_clustering['drug'], selected), :]
+
+    pyplot.figure()
+    seaborn.barplot(x='drug', y='n_clusters', hue='method', data=best_clustering)
+    pyplot.xticks(rotation=45)
+    pyplot.xlabel('')
+    pyplot.ylabel('Number of clusters')
+    pyplot.grid()
+    pyplot.tight_layout()
+    pyplot.savefig(save_to + 'best_clustering_drugs.pdf')
 
 
 if __name__ == "__main__":
 
     save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\'
-    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
+    run_clustering_grid = False
 
-    # plot_number_of_clusters('drugs', 300, save_to, filter_threshold=4)
-    # plot_number_of_clusters('cell_lines', 300, save_to, filter_threshold=4)
-    # plot_number_of_clusters('drugs', 30, save_to, filter_threshold=80)
-    # plot_number_of_clusters('cell_lines', 30, save_to, filter_threshold=80)
+    if run_clustering_grid:
+        # run clustering over many parameter sets and save results
+        path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
+        collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drugs, save_to)
 
-    # collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drugs, save_to)
+    # read results of clustering
+    clustering_results = pandas.read_csv(save_to + 'clusters_over_min_cluster_size.csv')
+    clustering_results = clustering_results.rename(columns={'model': 'method'})
 
-    plot_distribution_of_clusters()
+    # analyze full results
+    print_statistics_on_clustering_results(clustering_results)
+    plot_full_distribution_of_clusters(clustering_results, save_to)
+
+    # find best clustering results and analyze them
+    best_clustering = select_the_best_clustering_results(clustering_results)
+    plot_distributions_of_best_clustering_results(best_clustering, save_to)
+    plot_n_clusters_for_selected_drugs(best_clustering, save_to)
+
