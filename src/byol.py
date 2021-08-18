@@ -6,6 +6,7 @@ from matplotlib import pyplot
 from byol_pytorch import BYOL
 from torch.utils.data import Dataset, DataLoader
 
+from src.models import DeepClassifier
 from src.datasets import CustomImageDataset, JointImageDataset
 
 
@@ -60,15 +61,16 @@ def save_history_and_parameters(loss_history, byol_pars, save_path):
     print('history and parameters saved\n')
 
 
-def run_training_for_64x64_cuts(model, epochs, data_train,
-                                device=torch.device('cuda'), batch_size=256, grid=None,
+def run_training_for_64x64_cuts(epochs, data_loader,
+                                device=torch.device('cuda'), grid=None,
                                 save_path='D:\ETH\projects\morpho-learner\\res\\byol\\'):
+
+    model = DeepClassifier().to(device)
 
     if grid is None:
         grid_size = 1
         grid = generate_grid(grid_size, 64, randomize=False)
 
-    data_loader = DataLoader(data_train, batch_size=batch_size, shuffle=True, num_workers=4)
     train(model, grid, epochs, data_loader, device, save_path)
 
 

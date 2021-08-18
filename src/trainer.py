@@ -294,12 +294,9 @@ def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10)
     pyplot.close('all')
 
 
-def train_autoencoder(epochs, training_data, validation_data, trained_ae=None, batch_size=256, device=torch.device('cuda')):
+def train_autoencoder(epochs, data_loader_train, data_loader_val, trained_ae=None, batch_size=256, device=torch.device('cuda')):
 
     save_path = 'D:\ETH\projects\morpho-learner\\res\\ae\\'
-
-    data_loader_train = DataLoader(training_data, batch_size=batch_size, shuffle=True, num_workers=4)
-    data_loader_val = DataLoader(validation_data, batch_size=batch_size, shuffle=True, num_workers=4)
 
     if trained_ae is not None:
         model = trained_ae
@@ -318,13 +315,10 @@ def train_autoencoder(epochs, training_data, validation_data, trained_ae=None, b
     torch.save(model.state_dict(), save_path + 'autoencoder.torch')
 
 
-def train_deep_classifier_weakly(epochs, training_data, validation_data,
-                                 trained_cl=None, batch_size=256, device=torch.device('cuda')):
+def train_deep_classifier_weakly(epochs, loader_train, loader_val,
+                                 trained_cl=None, device=torch.device('cuda')):
 
     save_path = 'D:\ETH\projects\morpho-learner\\res\\dcl_weakly\\'
-
-    loader_train = DataLoader(training_data, batch_size=batch_size, shuffle=True, num_workers=4)
-    loader_val = DataLoader(validation_data, batch_size=batch_size, shuffle=True, num_workers=4)
 
     if trained_cl is not None:
         model = trained_cl
@@ -347,8 +341,8 @@ def train_deep_classifier_weakly(epochs, training_data, validation_data,
     torch.save(model.state_dict(), save_path + 'deep_classifier.torch')
 
 
-def train_together(epochs, training_data, validation_data,
-                   trained_ae=None, trained_cl=None, batch_size=256, device=torch.device('cuda')):
+def train_together(epochs, loader_train, loader_val,
+                   trained_ae=None, trained_cl=None, device=torch.device('cuda')):
 
     save_path = 'D:\ETH\projects\morpho-learner\\res\\aecl\\'
 
@@ -369,9 +363,6 @@ def train_together(epochs, training_data, validation_data,
     cl_optimizer = optim.Adam(cl.parameters(), lr=0.0002)
     cl_scheduler = optim.lr_scheduler.MultiStepLR(cl_optimizer, milestones=[30], gamma=0.5)
     cl_criterion = nn.CrossEntropyLoss()
-
-    loader_train = DataLoader(training_data, batch_size=batch_size, shuffle=True, num_workers=4)
-    loader_val = DataLoader(validation_data, batch_size=batch_size, shuffle=True, num_workers=4)
 
     last_rec_loss, last_acc = run_simultaneous_training(loader_train, loader_val,
                                                         ae, ae_optimizer, ae_criterion,
@@ -403,6 +394,9 @@ if __name__ == "__main__":
     data = MultiLabelDataset({0: path_to_controls, 1: path_to_drugs}, N=370000, transform=transform)
     training_data, validation_data = torch.utils.data.random_split(data, [700000, 40000])
 
+    data_loader_train = DataLoader(training_data, batch_size=256, shuffle=True, num_workers=4)
+    data_loader_val = DataLoader(validation_data, batch_size=256, shuffle=True, num_workers=4)
+
     print('training data:', training_data.__len__())
     print('validation data:', validation_data.__len__())
 
@@ -415,14 +409,13 @@ if __name__ == "__main__":
     epochs = 50
 
     if train_ae_alone:
-        train_autoencoder(epochs, training_data, validation_data, device=device)
+        train_autoencoder(epochs, data_loader_train, data_loader_val, device=device)
 
     if train_cl_weakly:
-        train_deep_classifier_weakly(epochs, training_data, validation_data, device=device)
+        train_deep_classifier_weakly(epochs, data_loader_train, data_loader_val, device=device)
 
     if train_both_weakly:
-        train_together(epochs, training_data, validation_data, device=device)
+        train_together(epochs, data_loader_train, data_loader_val, device=device)
 
     if train_cl_with_byol:
-        model = DeepClassifier().to(device)
-        run_training_for_64x64_cuts(model, epochs, training_data, device=device)
+        run_training_for_64x64_cuts(epochs, data_loader_train, device=device)
