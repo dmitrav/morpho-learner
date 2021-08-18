@@ -21,7 +21,14 @@ def get_byol_pars(im_size, randomize=True):
                     moving_average_decay=random.sample([0.8, 0.9, 0.99], 1)[0],
                     use_momentum=True)
     else:
-        return dict(image_size=im_size, hidden_layer='model.9')
+        return dict(image_size=im_size,
+                    hidden_layer='model.9',
+                    projection_size=64,
+                    projection_hidden_size=2048,
+                    augment_fn=lambda x: x,  # identity
+                    augment_fn2=lambda x: x,  # identity
+                    moving_average_decay=0.8,
+                    use_momentum=True)
 
 
 def generate_grid(grid_size, image_size, randomize=True):
@@ -53,26 +60,15 @@ def save_history_and_parameters(loss_history, byol_pars, save_path):
     print('history and parameters saved\n')
 
 
-def run_training_for_64x64_cuts(model, epochs, device, grid=None, save_path='D:\ETH\projects\morpho-learner\\res\\byol\\'):
-
-    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
-    path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
-
-    batch_size = 512
-    N = 350000
+def run_training_for_64x64_cuts(model, epochs, data_train,
+                                device=torch.device('cuda'), batch_size=256, grid=None,
+                                save_path='D:\ETH\projects\morpho-learner\\res\\byol\\'):
 
     if grid is None:
         grid_size = 1
-        grid = generate_grid(grid_size, 64, randomize=True)
+        grid = generate_grid(grid_size, 64, randomize=False)
 
-    training_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)  # ~429000
-    training_controls = CustomImageDataset(path_to_controls, 1, transform=lambda x: x / 255.)  # ~370000
-    training_drugs, _ = torch.utils.data.random_split(training_drugs, [N, training_drugs.__len__() - N])
-    training_controls, _ = torch.utils.data.random_split(training_controls, [N, training_controls.__len__() - N])
-
-    joint_data = JointImageDataset([training_drugs, training_controls], transform=lambda x: x / 255.)
-    data_loader = DataLoader(joint_data, batch_size=batch_size, shuffle=True)
-
+    data_loader = DataLoader(data_train, batch_size=batch_size, shuffle=True, num_workers=4)
     train(model, grid, epochs, data_loader, device, save_path)
 
 
@@ -87,7 +83,8 @@ def train(model, grid, epochs, data_loader, device, save_path):
 
         try:
             learner = BYOL(model, **grid['byol'][i]).to(device)
-            opt = torch.optim.Adam(learner.parameters(), lr=0.0001)
+            optimizer = torch.optim.Adam(learner.parameters(), lr=0.0002)
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[30], gamma=0.5)
 
             loss_history = []
             try:
@@ -98,17 +95,21 @@ def train(model, grid, epochs, data_loader, device, save_path):
                         images = batch_features[0].float().to(device)
                         loss = learner(images)
                         epoch_loss += loss.item()
-                        opt.zero_grad()
+                        optimizer.zero_grad()
                         loss.backward()
-                        opt.step()
+                        optimizer.step()
                         learner.update_moving_average()  # update moving average of teacher encoder and teacher centers
 
                     epoch_loss = epoch_loss / len(data_loader)
                     loss_history.append(epoch_loss)
-                    print("epoch {}: {} min, loss = {:.4f}".format(epoch + 1, int((time.time() - start) / 60),
-                                                                   epoch_loss))
+                    print("epoch {}: {} min, loss = {:.4f}".format(epoch + 1, int((time.time() - start) / 60), epoch_loss))
+
+                    # update lr
+                    if scheduler is not None:
+                        scheduler.step()
+
                     # save network
-                    torch.save(model.state_dict(), save_path + id + '\\dcl+byol_at_{}.torch'.format(epoch))
+                    torch.save(model.state_dict(), save_path + id + '\\byol_at_{}.torch'.format(epoch))
 
                     if epoch >= 2:
                         if epoch_loss > loss_history[epoch - 1] > loss_history[epoch - 2] or epoch_loss > loss_history[0]:

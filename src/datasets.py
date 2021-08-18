@@ -1,9 +1,55 @@
 import os, pandas, time, torch, numpy, itertools
+import random
+
 from torch.utils.data import Dataset, DataLoader
 from torchvision.io import read_image
 from PIL import Image
 
 from src import constants
+
+
+class MultiLabelDataset(Dataset):
+
+    def __init__(self, label_dir_map, N=None, transform=None, target_transform=None):
+
+        self.label_dir_map = label_dir_map
+        self.transform = transform
+        self.target_transform = target_transform
+
+        imgs = []
+        labels = []
+        for label, directory in label_dir_map.items():
+
+            all_imgs = os.listdir(directory)
+            all_labels = [label for x in all_imgs]
+
+            # keep only n random (for balancing the data)
+            n_random_indices = numpy.array(random.sample(range(len(all_imgs)), N))
+            n_random_imgs = numpy.array(all_imgs)[n_random_indices]
+            corresponding_labels = numpy.array(all_labels)[n_random_indices]
+
+            imgs.extend(list(n_random_imgs))
+            labels.extend(list(corresponding_labels))
+
+        self.img_labels = pandas.DataFrame({
+            'img': imgs,
+            'label': labels
+        })
+
+    def __len__(self):
+        return len(self.img_labels)
+
+    def __getitem__(self, idx):
+        label = self.img_labels.iloc[idx, 1]
+        directory = self.label_dir_map[label]
+        img_path = os.path.join(directory, self.img_labels.iloc[idx, 0])
+        image = read_image(img_path)
+        if self.transform:
+            image = self.transform(image / 255.)
+        if self.target_transform:
+            label = self.target_transform(label)
+        sample = (image, label)
+        return sample
 
 
 class CustomImageDataset(Dataset):
@@ -32,7 +78,7 @@ class CustomImageDataset(Dataset):
         image = read_image(img_path)
         label = self.img_labels.iloc[idx, 1]
         if self.transform:
-            image = self.transform(image)
+            image = self.transform(image / 255.)
         if self.target_transform:
             label = self.target_transform(label)
         sample = (image, label)
@@ -82,7 +128,7 @@ class JointImageDataset(Dataset):
 
         label = self.img_labels.iloc[idx, 2]
         if self.transform:
-            image = self.transform(image)
+            image = self.transform(image / 255.)
         if self.target_transform:
             label = self.target_transform(label)
         sample = (image, label)

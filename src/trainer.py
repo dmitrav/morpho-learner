@@ -1,14 +1,28 @@
-import os, pandas, time, torch, numpy, itertools
+import os, pandas, time, torch, numpy, itertools, random
 from matplotlib import pyplot
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
 from torchvision.io import read_image
 from torchmetrics import Accuracy
+import torch.nn.functional as F
+from torchvision import transforms as T
 
 from src.models import Autoencoder, Classifier, DeepClassifier
 from src.byol import run_training_for_64x64_cuts
-from src.datasets import CustomImageDataset, JointImageDataset
+from src.datasets import CustomImageDataset, JointImageDataset, MultiLabelDataset
 from src import constants
+
+
+class RandomApply(nn.Module):
+    def __init__(self, fn, p):
+        super().__init__()
+        self.fn = fn
+        self.p = p
+
+    def forward(self, x):
+        if random.random() > self.p:
+            return x
+        return self.fn(x)
 
 
 def run_autoencoder_training(data_loader_train, data_loader_test, model, optimizer, criterion, device, lr_scheduler=None, epochs=10):
@@ -57,61 +71,50 @@ def run_autoencoder_training(data_loader_train, data_loader_test, model, optimiz
     return loss
 
 
-def run_weakly_supervised_classifier_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
-                                              model, optimizer, criterion, device, lr_scheduler=None, epochs=10):
-    acc = 0
+def run_weakly_supervised_classifier_training(loader_train, loader_val, model, optimizer, criterion, device,
+                                              lr_scheduler=None, epochs=10):
+    f_acc = Accuracy().to(device)
+
+    acc, val_acc = 0, -1
     for epoch in range(epochs):
 
         start = time.time()
         loss = 0
         acc = 0
-        for batch_features, batch_labels in loader_train_drugs:
+        for batch_features, batch_labels in loader_train:
             # load it to the active device
             batch_features = batch_features.float().to(device)
+            batch_labels = batch_labels.to(device)
             # reset the gradients back to zero
             optimizer.zero_grad()
-            with torch.enable_grad():
-                train_loss = 0
 
-                # process drugs data
-                outputs = model(batch_features)
-                train_loss += criterion(outputs, batch_labels.to(device))
-                true_negatives = (outputs.argmax(-1) == 0).cpu().float().detach().numpy()
+            outputs = model(batch_features)
+            train_loss = criterion(outputs, batch_labels)
+            # compute accumulated gradients
+            train_loss.backward()
+            # perform parameter update based on current gradients
+            optimizer.step()
 
-                # process controls data
-                batch_features, batch_labels = next(iter(loader_train_controls))
-                outputs = model(batch_features.float().to(device))
-                train_loss += criterion(outputs, batch_labels.to(device))
-                true_positives = (outputs.argmax(-1) == 1).cpu().float().detach().numpy()
-
-                # compute accumulated gradients
-                train_loss.backward()
-                # perform parameter update based on current gradients
-                optimizer.step()
-                # add the mini-batch training loss to epoch loss
-                loss += train_loss.item()
-                acc += (true_positives.sum() + true_negatives.sum()) / (len(true_positives) + len(true_negatives))
+            # add the mini-batch training loss to epoch loss
+            loss += train_loss.item()
+            # add the mini-batch training acc to epoch acc
+            acc += float(f_acc(outputs, batch_labels))
 
         # compute epoch training loss
-        loss = loss / len(loader_train_drugs)
+        loss = loss / len(loader_train)
         # compute epoch training accuracy
-        acc = acc / len(loader_train_drugs)
+        acc = acc / len(loader_train)
 
         val_acc = 0
-        for batch_features, batch_labels in loader_val_drugs:
+        for batch_features, batch_labels in loader_val:
             # process drugs data
             batch_features = batch_features.float().to(device)
+            batch_labels = batch_labels.to(device)
             outputs = model(batch_features)
-            true_negatives = (outputs.argmax(-1) == 0).cpu().float().detach().numpy()
-            # process controls data
-            batch_features, batch_labels = next(iter(loader_val_controls))
-            outputs = model(batch_features.float().to(device))
-            true_positives = (outputs.argmax(-1) == 1).cpu().float().detach().numpy()
-
-            val_acc += (true_positives.sum() + true_negatives.sum()) / (len(true_positives) + len(true_negatives))
+            val_acc += float(f_acc(outputs, batch_labels))
 
         # compute epoch training accuracy
-        val_acc = val_acc / len(loader_val_drugs)
+        val_acc = val_acc / len(loader_val)
 
         # update lr
         if lr_scheduler is not None:
@@ -177,10 +180,11 @@ def run_supervised_classifier_training(loader_train, model, optimizer, criterion
     return train_acc, val_acc
 
 
-def run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
-                              ae_model, ae_optimizer, ae_criterion,
-                              cl_model, cl_optimizer, cl_criterion,
-                              device, epochs=10, deep_cl=True):
+def run_simultaneous_training(loader_train, loader_val, ae_model, ae_optimizer, ae_criterion, cl_model, cl_optimizer, cl_criterion,
+                              device, epochs=10, ae_scheduler=None, cl_scheduler=None):
+
+    f_acc = Accuracy().to(device)
+
     rec_loss_epoch = 0
     acc_epoch = 0
     for epoch in range(epochs):
@@ -190,42 +194,25 @@ def run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_
         cl_loss_epoch = 0
         rec_loss_epoch = 0
         acc_epoch = 0
-        for batch_features, batch_labels in loader_train_drugs:
+        for batch_features, batch_labels in loader_train:
 
             # TRAIN CLASSIFIER
 
             # reset gradients to zero
             cl_optimizer.zero_grad()
-
             # get features of drugs
             batch_features = batch_features.float().to(device)
-
+            batch_labels = batch_labels.to(device)
             # retrieve encodings
             encodings = ae_model.encoder(batch_features)
             # run through classifier
             outputs = cl_model(encodings)
-
-            # calculate loss on drugs
-            cl_loss = cl_criterion(outputs, batch_labels.to(device))
-            true_negatives = (outputs.argmax(-1) == 0).cpu().float().detach().numpy()
-
-            # get features of controls
-            control_features, control_labels = next(iter(loader_train_controls))
-            control_features = control_features.float().to(device)
-
-            # retrieve encodings
-            encodings = ae_model.encoder(control_features)
-            # run through classifier
-            outputs = cl_model(encodings)
-
-            true_positives = (outputs.argmax(-1) == 1).cpu().float().detach().numpy()
-            # add loss on controls
-            cl_loss += cl_criterion(outputs, control_labels.to(device))
-
+            # calculate loss
+            cl_loss = cl_criterion(outputs, batch_labels)
             cl_loss.backward()
             cl_optimizer.step()
 
-            acc_epoch += (true_positives.sum() + true_negatives.sum()) / (len(true_positives) + len(true_negatives))
+            acc_epoch += float(f_acc(outputs, batch_labels))
 
             # TRAIN AUTOENCODER
 
@@ -239,8 +226,8 @@ def run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_
                 # compute training reconstruction loss
                 ae_loss += ae_criterion(outputs, batch_features)
                 rec_loss_epoch += ae_loss.item()
-                # add 1/2 of classifier loss
-                ae_loss += 0.5 * cl_loss.item()
+                # add .1 of classifier loss
+                ae_loss += 0.1 * cl_loss.item()
 
                 # compute accumulated gradients
                 ae_loss.backward()
@@ -252,32 +239,28 @@ def run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_
             cl_loss_epoch += cl_loss.item()
 
         # compute the epoch training loss
-        ae_loss_epoch = ae_loss_epoch / len(loader_train_drugs)
-        cl_loss_epoch = cl_loss_epoch / len(loader_train_drugs)
-        rec_loss_epoch = rec_loss_epoch / len(loader_train_drugs)
-        acc_epoch = acc_epoch / len(loader_train_drugs)
+        ae_loss_epoch = ae_loss_epoch / len(loader_train)
+        cl_loss_epoch = cl_loss_epoch / len(loader_train)
+        rec_loss_epoch = rec_loss_epoch / len(loader_train)
+        acc_epoch = acc_epoch / len(loader_train)
 
         val_acc = 0
-        for batch_features, batch_labels in loader_val_drugs:
+        for batch_features, batch_labels in loader_val:
             # process drugs
             batch_features = batch_features.float().to(device)
-
+            batch_labels = batch_labels.to(device)
             encodings = ae_model.encoder(batch_features)
             outputs = cl_model(encodings)
-            true_negatives = (outputs.argmax(-1) == 0).cpu().float().detach().numpy()
-
-            # process controls
-            control_features, control_labels = next(iter(loader_train_controls))
-            control_features = control_features.float().to(device)
-
-            encodings = ae_model.encoder(control_features)
-            outputs = cl_model(encodings)
-            true_positives = (outputs.argmax(-1) == 1).cpu().float().detach().numpy()
-
-            val_acc += (true_positives.sum() + true_negatives.sum()) / (len(true_positives) + len(true_negatives))
+            val_acc += float(f_acc(outputs, batch_labels))
 
         # compute epoch validation accuracy
-        val_acc = val_acc / len(loader_val_drugs)
+        val_acc = val_acc / len(loader_val)
+
+        # update lr
+        if ae_scheduler is not None:
+            ae_scheduler.step()
+        if cl_scheduler is not None:
+            cl_scheduler.step()
 
         # display the epoch training loss
         print("epoch {}/{}: {} min, ae_loss = {:.4f}, cl_loss = {:.4f}, rec_loss = {:.4f}, acc = {:.4f}, val_acc = {:.4f}"
@@ -311,70 +294,50 @@ def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10)
     pyplot.close('all')
 
 
-def train_autoencoder(epochs, trained_ae=None, batch_size=256, device=torch.device('cuda')):
+def train_autoencoder(epochs, training_data, validation_data, trained_ae=None, batch_size=256, device=torch.device('cuda')):
 
-    path_to_data = 'D:\ETH\projects\morpho-learner\data\cut\\'
     save_path = 'D:\ETH\projects\morpho-learner\\res\\ae\\'
 
-    N = 380000  # ~90%
-    training_data = CustomImageDataset(path_to_data, 0, transform=lambda x: x / 255.)
-    training_data, test_data = torch.utils.data.random_split(training_data, [N, training_data.__len__() - N])
-
-    data_loader_train = DataLoader(training_data, batch_size=batch_size, shuffle=True)
-    data_loader_test = DataLoader(test_data, batch_size=batch_size, shuffle=True)
+    data_loader_train = DataLoader(training_data, batch_size=batch_size, shuffle=True, num_workers=4)
+    data_loader_val = DataLoader(validation_data, batch_size=batch_size, shuffle=True, num_workers=4)
 
     if trained_ae is not None:
         model = trained_ae
     else:
         model = Autoencoder().to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
-    # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[15, 35], gamma=0.5)
-    criterion = nn.BCELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.0002)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[30], gamma=0.5)
+    criterion = nn.L1Loss()
 
-    # best loss = 0.6331
-    last_rec_loss = run_autoencoder_training(data_loader_train, data_loader_test, model, optimizer, criterion, device, epochs=epochs)
+    last_rec_loss = run_autoencoder_training(data_loader_train, data_loader_val, model, optimizer, criterion, device, epochs=epochs, lr_scheduler=scheduler)
 
     save_path = save_path.replace('ae', 'ae_{}'.format(round(last_rec_loss, 4)))
-    plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=50)
+    plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=30)
 
     torch.save(model.state_dict(), save_path + 'autoencoder.torch')
 
 
-def train_deep_classifier_weakly(epochs, trained_cl=None, batch_size=256, device=torch.device('cuda')):
+def train_deep_classifier_weakly(epochs, training_data, validation_data,
+                                 trained_cl=None, batch_size=256, device=torch.device('cuda')):
 
-    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
-    path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
     save_path = 'D:\ETH\projects\morpho-learner\\res\\dcl_weakly\\'
 
-    Nd, Nc = 380000, 330000  # ~89%
-    transform = lambda x: x / 255.
-
-    training_drugs = CustomImageDataset(path_to_drugs, 0, transform=transform)
-    training_drugs, the_rest = torch.utils.data.random_split(training_drugs, [Nd, training_drugs.__len__() - Nd])
-    validation_drugs, _ = torch.utils.data.random_split(the_rest, [Nd // 2, the_rest.__len__() - Nd // 2])
-
-    training_controls = CustomImageDataset(path_to_controls, 1, transform=transform)
-    training_controls, the_rest = torch.utils.data.random_split(training_controls, [Nc, training_controls.__len__() - Nc])
-    validation_controls, _ = torch.utils.data.random_split(the_rest, [Nc // 2, the_rest.__len__() - Nc // 2])
-
-    loader_train_drugs = DataLoader(training_drugs, batch_size=batch_size, shuffle=True)
-    loader_train_controls = DataLoader(training_controls, batch_size=batch_size, shuffle=True)
-    loader_val_drugs = DataLoader(validation_drugs, batch_size=batch_size, shuffle=True)
-    loader_val_controls = DataLoader(validation_controls, batch_size=batch_size, shuffle=True)
+    loader_train = DataLoader(training_data, batch_size=batch_size, shuffle=True, num_workers=4)
+    loader_val = DataLoader(validation_data, batch_size=batch_size, shuffle=True, num_workers=4)
 
     if trained_cl is not None:
         model = trained_cl
     else:
         model = DeepClassifier().to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
-    # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 50, 80], gamma=0.3)
+    optimizer = optim.Adam(model.parameters(), lr=0.0002)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[30], gamma=0.5)
     criterion = nn.CrossEntropyLoss()
 
-    last_epoch_acc = run_weakly_supervised_classifier_training(loader_train_drugs, loader_train_controls,
-                                                               loader_val_drugs, loader_val_controls,
-                                                               model, optimizer, criterion, device, epochs=epochs)
+    last_epoch_acc = run_weakly_supervised_classifier_training(loader_train, loader_val,
+                                                               model, optimizer, criterion, device,
+                                                               epochs=epochs, lr_scheduler=scheduler)
 
     save_path = save_path.replace('dcl', 'dcl_{}'.format(round(last_epoch_acc, 4)))
 
@@ -384,10 +347,9 @@ def train_deep_classifier_weakly(epochs, trained_cl=None, batch_size=256, device
     torch.save(model.state_dict(), save_path + 'deep_classifier.torch')
 
 
-def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, device=torch.device('cuda')):
+def train_together(epochs, training_data, validation_data,
+                   trained_ae=None, trained_cl=None, batch_size=256, device=torch.device('cuda')):
 
-    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
-    path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
     save_path = 'D:\ETH\projects\morpho-learner\\res\\aecl\\'
 
     if trained_ae is not None:
@@ -395,88 +357,72 @@ def train_together(epochs, trained_ae=None, trained_cl=None, batch_size=256, dev
     else:
         ae = Autoencoder().to(device)
 
-    ae_optimizer = optim.Adam(ae.parameters(), lr=0.00015)
-    ae_criterion = nn.BCELoss()
+    ae_optimizer = optim.Adam(ae.parameters(), lr=0.0002)
+    ae_scheduler = optim.lr_scheduler.MultiStepLR(ae_optimizer, milestones=[30], gamma=0.5)
+    ae_criterion = nn.L1Loss()
 
     if trained_cl is not None:
         cl = trained_cl
     else:
         cl = Classifier().to(device)
 
-    cl_optimizer = optim.Adam(cl.parameters(), lr=0.00045)
+    cl_optimizer = optim.Adam(cl.parameters(), lr=0.0002)
+    cl_scheduler = optim.lr_scheduler.MultiStepLR(cl_optimizer, milestones=[30], gamma=0.5)
     cl_criterion = nn.CrossEntropyLoss()
 
-    Nd, Nc = 380000, 330000  # ~89%
+    loader_train = DataLoader(training_data, batch_size=batch_size, shuffle=True, num_workers=4)
+    loader_val = DataLoader(validation_data, batch_size=batch_size, shuffle=True, num_workers=4)
 
-    training_drugs = CustomImageDataset(path_to_drugs, 0, transform=lambda x: x / 255.)
-    training_drugs, validation_drugs = torch.utils.data.random_split(training_drugs, [Nd, training_drugs.__len__() - Nd])
-
-    training_controls = CustomImageDataset(path_to_controls, 1, transform=lambda x: x / 255.)
-    training_controls, the_rest = torch.utils.data.random_split(training_controls, [Nc, training_controls.__len__() - Nc])
-    validation_controls, _ = torch.utils.data.random_split(the_rest, [len(validation_drugs), the_rest.__len__() - len(validation_drugs)])
-
-    print('total drugs:', training_drugs.__len__())
-    print('total controls:', training_controls.__len__(), '\n')
-
-    loader_train_drugs = DataLoader(training_drugs, batch_size=batch_size, shuffle=True)
-    loader_train_controls = DataLoader(training_controls, batch_size=batch_size, shuffle=True)
-    loader_val_drugs = DataLoader(validation_drugs, batch_size=batch_size, shuffle=True)
-    loader_val_controls = DataLoader(validation_controls, batch_size=batch_size, shuffle=True)
-
-    last_rec_loss, last_acc = run_simultaneous_training(loader_train_drugs, loader_train_controls, loader_val_drugs, loader_val_controls,
+    last_rec_loss, last_acc = run_simultaneous_training(loader_train, loader_val,
                                                         ae, ae_optimizer, ae_criterion,
                                                         cl, cl_optimizer, cl_criterion,
-                                                        device, epochs=epochs)
+                                                        device, epochs=epochs,
+                                                        ae_scheduler=ae_scheduler, cl_scheduler=cl_scheduler)
 
     save_path = save_path.replace('aecl', 'aecl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
 
-    plot_reconstruction(loader_train_drugs, ae, save_to=save_path, n_images=30)
+    plot_reconstruction(loader_train, ae, save_to=save_path, n_images=30)
     torch.save(ae.state_dict(), save_path + 'ae.torch')
     torch.save(cl.state_dict(), save_path + 'cl.torch')
 
 
 if __name__ == "__main__":
 
-    train_ae_alone = False  # convolutional autoencoder
-    train_cl_weakly = False  # weakly supervised classifier
-    train_both_weakly = False  # autoencoder + weakly supervised classifier (2 classes)
-    train_cl_with_byol = False  # train cl with self-supervision as in BYOL
+    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
+    path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
+
+    # define augmentations like in BYOL or SimCLR (almost)
+    transform = torch.nn.Sequential(
+        T.RandomHorizontalFlip(),
+        RandomApply(T.GaussianBlur((3, 3), (1.0, 2.0)), p=0.2),
+        T.RandomResizedCrop((64, 64)),
+        T.Normalize(mean=torch.tensor([0.449]), std=torch.tensor([0.226]))
+    )
+
+    # make a balanced dataset of drugs and controls
+    data = MultiLabelDataset({0: path_to_controls, 1: path_to_drugs}, N=370000, transform=transform)
+    training_data, validation_data = torch.utils.data.random_split(data, [700000, 40000])
+
+    print('training data:', training_data.__len__())
+    print('validation data:', validation_data.__len__())
+
+    train_ae_alone = True  # convolutional autoencoder
+    train_cl_weakly = True  # weakly supervised classifier
+    train_both_weakly = True  # autoencoder + weakly supervised classifier (2 classes)
+    train_cl_with_byol = True  # train the common backbone with self-supervision as in BYOL
 
     device = torch.device('cuda')
+    epochs = 50
 
     if train_ae_alone:
-        # load model and continue training
-        path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\ae_at_60_0.6673\\autoencoder.torch"
-        ae = Autoencoder().to(device)
-        ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
-        ae.eval()
-
-        train_autoencoder(40, trained_ae=ae, device=device)
+        train_autoencoder(epochs, training_data, validation_data, device=device)
 
     if train_cl_weakly:
-        # load model and continue training
-        path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\dcl_at_60_0.7292\\deep_classifier.torch"
-        cl = DeepClassifier().to(device)
-        cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
-        cl.eval()
-
-        train_deep_classifier_weakly(40, trained_cl=cl, device=device)
+        train_deep_classifier_weakly(epochs, training_data, validation_data, device=device)
 
     if train_both_weakly:
-        # load models and continue training
-        path_to_ae_model = "D:\ETH\projects\morpho-learner\\res\\aecl_at_60_0.6672_0.7217\\ae.torch"
-        ae = Autoencoder().to(device)
-        ae.load_state_dict(torch.load(path_to_ae_model, map_location=device))
-        ae.eval()
-
-        path_to_cl_model = "D:\ETH\projects\morpho-learner\\res\\aecl_at_60_0.6672_0.7217\\cl.torch"
-        cl = Classifier().to(device)
-        cl.load_state_dict(torch.load(path_to_cl_model, map_location=device))
-        cl.eval()
-
-        train_together(40, trained_ae=ae, trained_cl=cl, device=device)
+        train_together(epochs, training_data, validation_data, device=device)
 
     if train_cl_with_byol:
-
-        cl = DeepClassifier().to(device)
-        run_training_for_64x64_cuts(cl, 100, device)
+        model = DeepClassifier().to(device)
+        run_training_for_64x64_cuts(model, epochs, training_data, device=device)
