@@ -195,15 +195,15 @@ def plot_n_clusters_for_selected_drugs(best_clustering, save_to):
 if __name__ == "__main__":
 
     save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\'
-    run_clustering_grid = True
+    run_clustering_grid = False
 
     if run_clustering_grid:
         # run clustering over many parameter sets and save results
         path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
-        collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drugs, (10, 51, 10), save_to)
+        collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_drugs, (50, 310, 50), save_to)
 
     # read results of clustering
-    clustering_results = pandas.read_csv(save_to + 'clusters_over_min_cluster_size.csv')
+    clustering_results = pandas.read_csv(save_to + 'clusters_over_min_cluster_size_50_300.csv')
 
     # analyze full results
     print_statistics_on_clustering_results(clustering_results)

@@ -439,7 +439,7 @@ if __name__ == "__main__":
 
     train_ae_alone = False  # convolutional autoencoder
     train_cl_weakly = False  # weakly supervised classifier
-    train_both_weakly = True  # autoencoder + weakly supervised classifier (2 classes)
+    train_both_weakly = False  # autoencoder + weakly supervised classifier (2 classes)
     train_cl_with_byol = False  # train cl with self-supervision as in BYOL
 
     device = torch.device('cuda')
