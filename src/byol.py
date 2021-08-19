@@ -10,15 +10,15 @@ from src.models import DeepClassifier
 from src.datasets import CustomImageDataset, JointImageDataset
 
 
-def get_byol_pars(im_size, randomize=True):
+def get_byol_pars(im_size, transform=None, randomize=True):
 
     if randomize:
         return dict(image_size=im_size,  # 256
                     hidden_layer='model.9',
                     projection_size=random.sample([64, 128, 256, 512, 1024, 2048], 1)[0],  # 256
                     projection_hidden_size=random.sample([512, 1024, 2048, 4096, 8192], 1)[0],  # 4096
-                    augment_fn=None,
-                    augment_fn2=None,
+                    augment_fn=transform,
+                    augment_fn2=transform,
                     moving_average_decay=random.sample([0.8, 0.9, 0.99], 1)[0],
                     use_momentum=True)
     else:
@@ -26,8 +26,8 @@ def get_byol_pars(im_size, randomize=True):
                     hidden_layer='model.9',
                     projection_size=64,
                     projection_hidden_size=2048,
-                    augment_fn=lambda x: x,  # identity
-                    augment_fn2=lambda x: x,  # identity
+                    augment_fn=transform,
+                    augment_fn2=transform,
                     moving_average_decay=0.8,
                     use_momentum=True)
 
@@ -85,8 +85,8 @@ def train(model, grid, epochs, data_loader, device, save_path):
 
         try:
             learner = BYOL(model, **grid['byol'][i]).to(device)
-            optimizer = torch.optim.Adam(learner.parameters(), lr=0.0002)
-            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[30], gamma=0.5)
+            optimizer = torch.optim.Adam(learner.parameters(), lr=0.0001)
+            scheduler = None
 
             loss_history = []
             try:

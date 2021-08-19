@@ -303,11 +303,10 @@ def train_autoencoder(epochs, data_loader_train, data_loader_val, trained_ae=Non
     else:
         model = Autoencoder().to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=0.0002)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[30], gamma=0.5)
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)
     criterion = nn.L1Loss()
 
-    last_rec_loss = run_autoencoder_training(data_loader_train, data_loader_val, model, optimizer, criterion, device, epochs=epochs, lr_scheduler=scheduler)
+    last_rec_loss = run_autoencoder_training(data_loader_train, data_loader_val, model, optimizer, criterion, device, epochs=epochs)
 
     save_path = save_path.replace('ae', 'ae_{}'.format(round(last_rec_loss, 4)))
     plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=30)
@@ -325,13 +324,12 @@ def train_deep_classifier_weakly(epochs, loader_train, loader_val,
     else:
         model = DeepClassifier().to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=0.0002)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[30], gamma=0.5)
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)
     criterion = nn.CrossEntropyLoss()
 
     last_epoch_acc = run_weakly_supervised_classifier_training(loader_train, loader_val,
                                                                model, optimizer, criterion, device,
-                                                               epochs=epochs, lr_scheduler=scheduler)
+                                                               epochs=epochs)
 
     save_path = save_path.replace('dcl', 'dcl_{}'.format(round(last_epoch_acc, 4)))
 
@@ -351,8 +349,7 @@ def train_together(epochs, loader_train, loader_val,
     else:
         ae = Autoencoder().to(device)
 
-    ae_optimizer = optim.Adam(ae.parameters(), lr=0.0002)
-    ae_scheduler = optim.lr_scheduler.MultiStepLR(ae_optimizer, milestones=[30], gamma=0.5)
+    ae_optimizer = optim.Adam(ae.parameters(), lr=0.0001)
     ae_criterion = nn.L1Loss()
 
     if trained_cl is not None:
@@ -360,15 +357,13 @@ def train_together(epochs, loader_train, loader_val,
     else:
         cl = Classifier().to(device)
 
-    cl_optimizer = optim.Adam(cl.parameters(), lr=0.0002)
-    cl_scheduler = optim.lr_scheduler.MultiStepLR(cl_optimizer, milestones=[30], gamma=0.5)
+    cl_optimizer = optim.Adam(cl.parameters(), lr=0.0001)
     cl_criterion = nn.CrossEntropyLoss()
 
     last_rec_loss, last_acc = run_simultaneous_training(loader_train, loader_val,
                                                         ae, ae_optimizer, ae_criterion,
                                                         cl, cl_optimizer, cl_criterion,
-                                                        device, epochs=epochs,
-                                                        ae_scheduler=ae_scheduler, cl_scheduler=cl_scheduler)
+                                                        device, epochs=epochs)
 
     save_path = save_path.replace('aecl', 'aecl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
 
@@ -385,7 +380,7 @@ if __name__ == "__main__":
     # define augmentations like in BYOL or SimCLR (almost)
     transform = torch.nn.Sequential(
         T.RandomHorizontalFlip(),
-        RandomApply(T.GaussianBlur((3, 3), (1.0, 2.0)), p=0.2),
+        RandomApply(T.GaussianBlur((3, 3), (.1, 2.0)), p=0.2),
         T.RandomResizedCrop((64, 64)),
         T.Normalize(mean=torch.tensor([0.449]), std=torch.tensor([0.226]))
     )
@@ -406,7 +401,7 @@ if __name__ == "__main__":
     train_cl_with_byol = True  # train the common backbone with self-supervision as in BYOL
 
     device = torch.device('cuda')
-    epochs = 50
+    epochs = 100
 
     if train_ae_alone:
         train_autoencoder(epochs, data_loader_train, data_loader_val, device=device)
@@ -418,4 +413,7 @@ if __name__ == "__main__":
         train_together(epochs, data_loader_train, data_loader_val, device=device)
 
     if train_cl_with_byol:
+        # change dataset's transform to identity, as BYOL already has it
+        training_data.dataset.transform = torch.nn.Sequential(torch.nn.Identity())
+        data_loader_train = DataLoader(training_data, batch_size=256, shuffle=True, num_workers=4)
         run_training_for_64x64_cuts(epochs, data_loader_train, device=device)
