@@ -1,4 +1,4 @@
-import os, pandas, time, torch, numpy, itertools, random
+import os, pandas, time, torch, numpy, itertools, random, tracemalloc
 from matplotlib import pyplot
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
@@ -404,16 +404,33 @@ if __name__ == "__main__":
     epochs = 100
 
     if train_ae_alone:
+        tracemalloc.start()
         train_autoencoder(epochs, data_loader_train, data_loader_val, device=device)
+        current, peak = tracemalloc.get_traced_memory()
+        print('current: {} bytes, peak: {} bytes'.format(current, peak))
+        tracemalloc.stop()
 
     if train_cl_weakly:
+        tracemalloc.start()
         train_deep_classifier_weakly(epochs, data_loader_train, data_loader_val, device=device)
+        current, peak = tracemalloc.get_traced_memory()
+        print('current: {} bytes, peak: {} bytes'.format(current, peak))
+        tracemalloc.stop()
 
     if train_both_weakly:
+        tracemalloc.start()
         train_together(epochs, data_loader_train, data_loader_val, device=device)
+        current, peak = tracemalloc.get_traced_memory()
+        print('current: {} bytes, peak: {} bytes'.format(current, peak))
+        tracemalloc.stop()
 
     if train_cl_with_byol:
         # change dataset's transform to identity, as BYOL already has it
         training_data.dataset.transform = torch.nn.Sequential(torch.nn.Identity())
         data_loader_train = DataLoader(training_data, batch_size=256, shuffle=True, num_workers=4)
+
+        tracemalloc.start()
         run_training_for_64x64_cuts(epochs, data_loader_train, device=device)
+        current, peak = tracemalloc.get_traced_memory()
+        print('current: {} bytes, peak: {} bytes'.format(current, peak))
+        tracemalloc.stop()
