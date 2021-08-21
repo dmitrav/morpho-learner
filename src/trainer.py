@@ -324,7 +324,7 @@ def train_deep_classifier_weakly(epochs, loader_train, loader_val,
     else:
         model = DeepClassifier().to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    optimizer = optim.Adam(model.parameters(), lr=0.0005)
     criterion = nn.CrossEntropyLoss()
 
     last_epoch_acc = run_weakly_supervised_classifier_training(loader_train, loader_val,
@@ -407,21 +407,21 @@ if __name__ == "__main__":
         tracemalloc.start()
         train_autoencoder(epochs, data_loader_train, data_loader_val, device=device)
         current, peak = tracemalloc.get_traced_memory()
-        print('current: {} bytes, peak: {} bytes'.format(current, peak))
+        print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
         tracemalloc.stop()
 
     if train_cl_weakly:
         tracemalloc.start()
         train_deep_classifier_weakly(epochs, data_loader_train, data_loader_val, device=device)
         current, peak = tracemalloc.get_traced_memory()
-        print('current: {} bytes, peak: {} bytes'.format(current, peak))
+        print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
         tracemalloc.stop()
 
     if train_both_weakly:
         tracemalloc.start()
         train_together(epochs, data_loader_train, data_loader_val, device=device)
         current, peak = tracemalloc.get_traced_memory()
-        print('current: {} bytes, peak: {} bytes'.format(current, peak))
+        print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
         tracemalloc.stop()
 
     if train_cl_with_byol:
@@ -432,5 +432,5 @@ if __name__ == "__main__":
         tracemalloc.start()
         run_training_for_64x64_cuts(epochs, data_loader_train, device=device)
         current, peak = tracemalloc.get_traced_memory()
-        print('current: {} bytes, peak: {} bytes'.format(current, peak))
+        print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
         tracemalloc.stop()
