@@ -294,9 +294,10 @@ def run_simultaneous_training(loader_train, loader_val, ae_model, ae_optimizer, 
 def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10):
 
     for i in range(n_images):
-        train_features, _ = next(iter(data_loader))
-        img = train_features[0].squeeze()
-        img_tensor = torch.Tensor(numpy.expand_dims(train_features[0], axis=0))
+        batch = next(iter(data_loader))
+        crops, _ = batch[0]
+        img = crops.squeeze()[0]
+        img_tensor = torch.Tensor(numpy.expand_dims(crops[0], axis=0))
         rec = trained_model(img_tensor.cuda())
 
         pyplot.figure()
@@ -433,7 +434,7 @@ if __name__ == "__main__":
     path_to_train_data = 'D:\ETH\projects\morpho-learner\data\\train\\'
     path_to_test_data = 'D:\ETH\projects\morpho-learner\data\\test\\'
     crop_size = 64
-    epochs = 5
+    epochs = 3
     batch_size = 256
 
     # make datasets with no augmentations and single crops
