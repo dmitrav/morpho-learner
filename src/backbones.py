@@ -394,14 +394,13 @@ if __name__ == '__main__':
     training_data, validation_data = torch.utils.data.random_split(data, [700000, 99577])
 
     device = torch.device('cuda')
-    epochs = 20
+    epochs = 10
 
     models = [
-        Backbone_3e,
-        Backbone_3a
+        Autoencoder
     ]
 
-    for T in [no_transform, transform]:
+    for T in [transform]:
 
         training_data.dataset.transform = T
         validation_data.dataset.transform = T
@@ -416,7 +415,8 @@ if __name__ == '__main__':
             model = model().to(device)
 
             tracemalloc.start()
-            trainer.train_deep_classifier_weakly(epochs, data_loader_train, data_loader_val, trained_cl=model, device=device)
+            # trainer.train_deep_classifier_weakly(epochs, data_loader_train, data_loader_val, trained_cl=model, device=device)
+            trainer.train_autoencoder(epochs, data_loader_train, data_loader_val, trained_ae=model, device=device)
             current, peak = tracemalloc.get_traced_memory()
             print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
             tracemalloc.stop()

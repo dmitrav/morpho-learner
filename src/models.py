@@ -7,37 +7,35 @@ from src.constants import cell_lines, drugs
 
 class Autoencoder(nn.Module):
 
-    def __init__(self, **kwargs):
+    def __init__(self):
         super().__init__()
 
         self.encoder = nn.Sequential(
-            nn.Conv2d(1, 64, (3,3), stride=(1,1), padding=(1,1)),
+            nn.Conv2d(1, 32, (3, 3), stride=(1, 1), padding=(1, 1)),
             nn.ReLU(True),
             nn.MaxPool2d(2),
 
-            nn.Conv2d(64, 32, (3,3), stride=(1,1), padding=(1,1)),
+            nn.Conv2d(32, 64, (3, 3), stride=(1, 1), padding=(1, 1)),
             nn.ReLU(True),
             nn.MaxPool2d(2),
 
-            nn.Conv2d(32, 16, (3,3), stride=(1,1), padding=(1,1)),
+            nn.Conv2d(64, 128, (3, 3), stride=(1, 1), padding=(1, 1)),
             nn.ReLU(True),
-            nn.Conv2d(16, 8, (3,3), stride=(1,1), padding=(1,1))
+            nn.MaxPool2d(4),  # 128 x 4 x 4
         )
 
         self.decoder = nn.Sequential(
 
-            nn.ConvTranspose2d(8, 32, (3,3), stride=(1,1), padding=(1,1)),
+            nn.Upsample(scale_factor=4),
+            nn.ConvTranspose2d(128, 64, (3,3), stride=(1,1), padding=(1,1)),
             nn.ReLU(True),
+
             nn.Upsample(scale_factor=2),
-
-            nn.ConvTranspose2d(32, 64, (3,3), stride=(1,1), padding=(1,1)),
+            nn.ConvTranspose2d(64, 32, (3,3), stride=(1,1), padding=(1,1)),
             nn.ReLU(True),
+
             nn.Upsample(scale_factor=2),
-
-            nn.ConvTranspose2d(64, 64, (3, 3), stride=(1, 1), padding=(1, 1)),
-            nn.ReLU(True),
-
-            nn.ConvTranspose2d(64, 1, (3, 3), stride=(1, 1), padding=(1, 1))
+            nn.ConvTranspose2d(32, 1, (3, 3), stride=(1,1), padding=(1,1))
         )
 
         print(self)
@@ -52,9 +50,44 @@ class Autoencoder(nn.Module):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
 
+class DeepClassifier(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+        self.model = nn.Sequential(
+            nn.Conv2d(1, 32, (3, 3), stride=(1, 1), padding=(1, 1)),
+            nn.ReLU(True),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(32, 64, (3, 3), stride=(1, 1), padding=(1, 1)),
+            nn.ReLU(True),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(64, 128, (3, 3), stride=(1, 1), padding=(1, 1)),
+            nn.ReLU(True),
+            nn.MaxPool2d(4),  # 128 x 4 x 4
+
+            nn.Flatten(),
+            nn.Linear(2048, 256),
+            nn.LeakyReLU(True),
+            nn.Linear(256, 2),
+            nn.Softmax(dim=1)
+        )
+
+        print(self)
+        print('number of parameters: {}\n'.format(self.count_parameters()))
+
+    def forward(self, features):
+        return self.model(features)
+
+    def count_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+
 class Classifier(nn.Module):
 
-    def __init__(self, n_classes=2):
+    def __init__(self):
         super().__init__()
 
         # plugs in after convolutional autoencoder -> needs flattening of the filters
@@ -62,7 +95,7 @@ class Classifier(nn.Module):
             nn.Flatten(),
             nn.Linear(2048, 256),
             nn.LeakyReLU(),
-            nn.Linear(256, n_classes),
+            nn.Linear(256, 2),
             nn.Softmax(dim=1)
         )
 
@@ -74,83 +107,3 @@ class Classifier(nn.Module):
 
     def count_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-
-class DrugClassifier(nn.Module):
-
-    def __init__(self):
-        super().__init__()
-
-        self.model = nn.Sequential(
-            nn.Linear(2048, 256),
-            nn.LeakyReLU(),
-            nn.Linear(256, len(drugs)),
-            nn.Softmax(dim=1)
-        )
-
-        print(self)
-        print('number of parameters: {}\n'.format(self.count_parameters()))
-
-    def forward(self, features):
-        return self.model(features)
-
-    def count_parameters(self):
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-
-class CellClassifier(nn.Module):
-
-    def __init__(self):
-        super().__init__()
-
-        self.model = nn.Sequential(
-            nn.Linear(2048, len(cell_lines)),
-            nn.LeakyReLU(),
-            nn.Linear(len(cell_lines), len(cell_lines)),
-            nn.Softmax(dim=1)
-        )
-
-        print(self)
-        print('number of parameters: {}\n'.format(self.count_parameters()))
-
-    def forward(self, features):
-        return self.model(features)
-
-    def count_parameters(self):
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-
-class DeepClassifier(nn.Module):
-
-    def __init__(self, n_classes=2):
-        super().__init__()
-
-        self.model = nn.Sequential(
-            nn.Conv2d(1, 64, (3, 3), stride=(1, 1), padding=(1, 1)),
-            nn.ReLU(True),
-            nn.MaxPool2d(2),
-
-            nn.Conv2d(64, 32, (3, 3), stride=(1, 1), padding=(1, 1)),
-            nn.ReLU(True),
-            nn.MaxPool2d(2),
-
-            nn.Conv2d(32, 16, (3, 3), stride=(1, 1), padding=(1, 1)),
-            nn.ReLU(True),
-            nn.Conv2d(16, 8, (3, 3), stride=(1, 1), padding=(1, 1)),
-
-            nn.Flatten(),
-            nn.Linear(2048, 256),
-            nn.LeakyReLU(True),
-            nn.Linear(256, n_classes),
-            nn.Softmax(dim=1)
-        )
-
-        print(self)
-        print('number of parameters: {}\n'.format(self.count_parameters()))
-
-    def forward(self, features):
-        return self.model(features)
-
-    def count_parameters(self):
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
-

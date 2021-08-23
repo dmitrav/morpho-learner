@@ -9,7 +9,7 @@ from torchvision import transforms as T
 
 from src.models import Autoencoder, Classifier, DeepClassifier
 from src.byol import run_training_for_64x64_cuts
-from src.datasets import CustomImageDataset, JointImageDataset, MultiLabelDataset
+from src.datasets import CustomImageDataset, JointImageDataset, MultiLabelDataset, MultiCropDataset
 from src import constants
 
 
@@ -33,33 +33,40 @@ def run_autoencoder_training(data_loader_train, data_loader_test, model, optimiz
 
         start = time.time()
         loss = 0
-        for batch_features in data_loader_train:
-            # load it to the active device
-            batch_features = batch_features[0].float().to(device)
-            # reset the gradients back to zero
-            optimizer.zero_grad()
-            # compute reconstructions
-            outputs = model(batch_features)
-            # compute training reconstruction loss
-            train_loss = criterion(outputs, batch_features)
-            # compute accumulated gradients
-            train_loss.backward()
-            # perform parameter update based on current gradients
-            optimizer.step()
-            # add the mini-batch training loss to epoch loss
-            loss += train_loss.item()
+        n_crops = 1
+        for batch in data_loader_train:
+
+            n_crops = len(batch)
+            for crops, _ in batch:
+                # load it to the active device
+                crops = crops.float().to(device)
+                # reset the gradients back to zero
+                optimizer.zero_grad()
+                # compute reconstructions
+                outputs = model(crops)
+                # compute training reconstruction loss
+                train_loss = criterion(outputs, crops)
+                # compute accumulated gradients
+                train_loss.backward()
+                # perform parameter update based on current gradients
+                optimizer.step()
+                # add the mini-batch training loss to epoch loss
+                loss += train_loss.item()
 
         # compute the epoch training loss
-        loss = loss / len(data_loader_train)
+        loss = loss / len(data_loader_train) / n_crops
 
         val_loss = 0
-        for batch_features in data_loader_test:
-            batch_features = batch_features[0].float().to(device)
-            outputs = model(batch_features)
-            val_loss += criterion(outputs, batch_features).item()
+        n_crops = 1
+        for batch in data_loader_test:
+            n_crops = len(batch)
+            for crops, _ in batch:
+                crops = crops.float().to(device)
+                outputs = model(crops)
+                val_loss += criterion(outputs, crops).item()
 
         # compute the epoch training loss
-        val_loss = val_loss / len(data_loader_test)
+        val_loss = val_loss / len(data_loader_test) / n_crops
 
         # update lr
         if lr_scheduler is not None:
@@ -81,40 +88,47 @@ def run_weakly_supervised_classifier_training(loader_train, loader_val, model, o
         start = time.time()
         loss = 0
         acc = 0
-        for batch_features, batch_labels in loader_train:
-            # load it to the active device
-            batch_features = batch_features.float().to(device)
-            batch_labels = batch_labels.to(device)
-            # reset the gradients back to zero
-            optimizer.zero_grad()
+        n_crops = 1
+        for batch in loader_train:
 
-            outputs = model(batch_features)
-            train_loss = criterion(outputs, batch_labels)
-            # compute accumulated gradients
-            train_loss.backward()
-            # perform parameter update based on current gradients
-            optimizer.step()
+            n_crops = len(batch)
+            for crops, labels in batch:
+                # load it to the active device
+                crops = crops.float().to(device)
+                labels = labels.to(device)
+                # reset the gradients back to zero
+                optimizer.zero_grad()
 
-            # add the mini-batch training loss to epoch loss
-            loss += train_loss.item()
-            # add the mini-batch training acc to epoch acc
-            acc += float(f_acc(outputs, batch_labels))
+                outputs = model(crops)
+                train_loss = criterion(outputs, labels)
+                # compute accumulated gradients
+                train_loss.backward()
+                # perform parameter update based on current gradients
+                optimizer.step()
+
+                # add the mini-batch training loss to epoch loss
+                loss += train_loss.item()
+                # add the mini-batch training acc to epoch acc
+                acc += float(f_acc(outputs, labels))
 
         # compute epoch training loss
-        loss = loss / len(loader_train)
+        loss = loss / len(loader_train) / n_crops
         # compute epoch training accuracy
-        acc = acc / len(loader_train)
+        acc = acc / len(loader_train) / n_crops
 
         val_acc = 0
-        for batch_features, batch_labels in loader_val:
-            # process drugs data
-            batch_features = batch_features.float().to(device)
-            batch_labels = batch_labels.to(device)
-            outputs = model(batch_features)
-            val_acc += float(f_acc(outputs, batch_labels))
+        n_crops = 1
+        for batch in loader_val:
+            n_crops = len(batch)
+            for crops, labels in batch:
+                # process drugs data
+                crops = crops.float().to(device)
+                labels = labels.to(device)
+                outputs = model(crops)
+                val_acc += float(f_acc(outputs, labels))
 
         # compute epoch training accuracy
-        val_acc = val_acc / len(loader_val)
+        val_acc = val_acc / len(loader_val) / n_crops
 
         # update lr
         if lr_scheduler is not None:
@@ -194,67 +208,75 @@ def run_simultaneous_training(loader_train, loader_val, ae_model, ae_optimizer, 
         cl_loss_epoch = 0
         rec_loss_epoch = 0
         acc_epoch = 0
-        for batch_features, batch_labels in loader_train:
+        n_crops = 1
+        for batch in loader_train:
 
-            # TRAIN CLASSIFIER
+            n_crops = len(batch)
+            for crops, labels in batch:
 
-            # reset gradients to zero
-            cl_optimizer.zero_grad()
-            # get features of drugs
-            batch_features = batch_features.float().to(device)
-            batch_labels = batch_labels.to(device)
-            # retrieve encodings
-            encodings = ae_model.encoder(batch_features)
-            # run through classifier
-            outputs = cl_model(encodings)
-            # calculate loss
-            cl_loss = cl_criterion(outputs, batch_labels)
-            cl_loss.backward()
-            cl_optimizer.step()
+                # TRAIN CLASSIFIER
 
-            acc_epoch += float(f_acc(outputs, batch_labels))
+                # reset gradients to zero
+                cl_optimizer.zero_grad()
+                # get features of drugs
+                crops = crops.float().to(device)
+                labels = labels.to(device)
+                # retrieve encodings
+                encodings = ae_model.encoder(crops)
+                # run through classifier
+                outputs = cl_model(encodings)
+                # calculate loss
+                cl_loss = cl_criterion(outputs, labels)
+                cl_loss.backward()
+                cl_optimizer.step()
 
-            # TRAIN AUTOENCODER
+                acc_epoch += float(f_acc(outputs, labels))
 
-            # reset the gradients to zero
-            ae_optimizer.zero_grad()
-            with torch.enable_grad():
+                # TRAIN AUTOENCODER
 
-                ae_loss = 0.
-                # compute reconstructions
-                outputs = ae_model(batch_features)
-                # compute training reconstruction loss
-                ae_loss += ae_criterion(outputs, batch_features)
-                rec_loss_epoch += ae_loss.item()
-                # add .1 of classifier loss
-                ae_loss += 0.1 * cl_loss.item()
+                # reset the gradients to zero
+                ae_optimizer.zero_grad()
+                with torch.enable_grad():
 
-                # compute accumulated gradients
-                ae_loss.backward()
-                # perform parameter update based on current gradients
-                ae_optimizer.step()
+                    ae_loss = 0.
+                    # compute reconstructions
+                    outputs = ae_model(crops)
+                    # compute training reconstruction loss
+                    ae_loss += ae_criterion(outputs, crops)
+                    rec_loss_epoch += ae_loss.item()
+                    # add classifier loss
+                    ae_loss += cl_loss.item()
+
+                    # compute accumulated gradients
+                    ae_loss.backward()
+                    # perform parameter update based on current gradients
+                    ae_optimizer.step()
 
             # add the mini-batch training loss to epoch loss
             ae_loss_epoch += ae_loss.item()
             cl_loss_epoch += cl_loss.item()
 
         # compute the epoch training loss
-        ae_loss_epoch = ae_loss_epoch / len(loader_train)
-        cl_loss_epoch = cl_loss_epoch / len(loader_train)
-        rec_loss_epoch = rec_loss_epoch / len(loader_train)
-        acc_epoch = acc_epoch / len(loader_train)
+        ae_loss_epoch = ae_loss_epoch / len(loader_train) / n_crops
+        cl_loss_epoch = cl_loss_epoch / len(loader_train) / n_crops
+        rec_loss_epoch = rec_loss_epoch / len(loader_train) / n_crops
+        acc_epoch = acc_epoch / len(loader_train) / n_crops
 
         val_acc = 0
-        for batch_features, batch_labels in loader_val:
-            # process drugs
-            batch_features = batch_features.float().to(device)
-            batch_labels = batch_labels.to(device)
-            encodings = ae_model.encoder(batch_features)
-            outputs = cl_model(encodings)
-            val_acc += float(f_acc(outputs, batch_labels))
+        n_crops = 1
+        for batch in loader_val:
+
+            n_crops = len(batch)
+            for crops, labels in batch:
+                # process drugs
+                crops = crops.float().to(device)
+                labels = labels.to(device)
+                encodings = ae_model.encoder(crops)
+                outputs = cl_model(encodings)
+                val_acc += float(f_acc(outputs, labels))
 
         # compute epoch validation accuracy
-        val_acc = val_acc / len(loader_val)
+        val_acc = val_acc / len(loader_val) / n_crops
 
         # update lr
         if ae_scheduler is not None:
@@ -294,9 +316,9 @@ def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10)
     pyplot.close('all')
 
 
-def train_autoencoder(epochs, data_loader_train, data_loader_val, trained_ae=None, batch_size=256, device=torch.device('cuda')):
+def train_autoencoder(epochs, data_loader_train, data_loader_val, trained_ae=None, device=torch.device('cuda'), run_id=""):
 
-    save_path = 'D:\ETH\projects\morpho-learner\\res\\ae\\'
+    save_path = 'D:\ETH\projects\morpho-learner\\res\\ae\\{}\\'.format(run_id)
 
     if trained_ae is not None:
         model = trained_ae
@@ -304,7 +326,7 @@ def train_autoencoder(epochs, data_loader_train, data_loader_val, trained_ae=Non
         model = Autoencoder().to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
-    criterion = nn.L1Loss()
+    criterion = nn.MSELoss()
 
     last_rec_loss = run_autoencoder_training(data_loader_train, data_loader_val, model, optimizer, criterion, device, epochs=epochs)
 
@@ -314,10 +336,9 @@ def train_autoencoder(epochs, data_loader_train, data_loader_val, trained_ae=Non
     torch.save(model.state_dict(), save_path + 'autoencoder.torch')
 
 
-def train_deep_classifier_weakly(epochs, loader_train, loader_val,
-                                 trained_cl=None, device=torch.device('cuda')):
+def train_deep_classifier_weakly(epochs, loader_train, loader_val, trained_cl=None, device=torch.device('cuda'), run_id=""):
 
-    save_path = 'D:\ETH\projects\morpho-learner\\res\\dcl_weakly\\'
+    save_path = 'D:\ETH\projects\morpho-learner\\res\\cl\\{}\\'.format(run_id)
 
     if trained_cl is not None:
         model = trained_cl
@@ -331,7 +352,7 @@ def train_deep_classifier_weakly(epochs, loader_train, loader_val,
                                                                model, optimizer, criterion, device,
                                                                epochs=epochs)
 
-    save_path = save_path.replace('dcl', 'dcl_{}'.format(round(last_epoch_acc, 4)))
+    save_path = save_path.replace('cl', 'cl_{}'.format(round(last_epoch_acc, 4)))
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -340,9 +361,9 @@ def train_deep_classifier_weakly(epochs, loader_train, loader_val,
 
 
 def train_together(epochs, loader_train, loader_val,
-                   trained_ae=None, trained_cl=None, device=torch.device('cuda')):
+                   trained_ae=None, trained_cl=None, device=torch.device('cuda'), run_id=''):
 
-    save_path = 'D:\ETH\projects\morpho-learner\\res\\aecl\\'
+    save_path = 'D:\ETH\projects\morpho-learner\\res\\aecl\\{}\\'.format(run_id)
 
     if trained_ae is not None:
         ae = trained_ae
@@ -350,7 +371,7 @@ def train_together(epochs, loader_train, loader_val,
         ae = Autoencoder().to(device)
 
     ae_optimizer = optim.Adam(ae.parameters(), lr=0.0001)
-    ae_criterion = nn.L1Loss()
+    ae_criterion = nn.MSELoss()
 
     if trained_cl is not None:
         cl = trained_cl
@@ -372,65 +393,69 @@ def train_together(epochs, loader_train, loader_val,
     torch.save(cl.state_dict(), save_path + 'cl.torch')
 
 
-if __name__ == "__main__":
+def train_all_models(epochs, batch_size, train_dataset, test_dataset, dataset_id):
 
-    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
-    path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
+    data_loader_train = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
+    data_loader_val = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
 
-    # define augmentations like in BYOL or SimCLR (almost)
-    transform = torch.nn.Sequential(
-        T.RandomHorizontalFlip(),
-        RandomApply(T.GaussianBlur((3, 3), (.1, 2.0)), p=0.2),
-        T.RandomResizedCrop((64, 64)),
-        T.Normalize(mean=torch.tensor([0.449]), std=torch.tensor([0.226]))
-    )
-
-    # make a balanced dataset of drugs and controls
-    data = MultiLabelDataset({0: path_to_controls, 1: path_to_drugs}, N=370000, transform=transform)
-    training_data, validation_data = torch.utils.data.random_split(data, [700000, 40000])
-
-    data_loader_train = DataLoader(training_data, batch_size=256, shuffle=True, num_workers=4)
-    data_loader_val = DataLoader(validation_data, batch_size=256, shuffle=True, num_workers=4)
-
-    print('training data:', training_data.__len__())
-    print('validation data:', validation_data.__len__())
-
-    train_ae_alone = True  # convolutional autoencoder
-    train_cl_weakly = True  # weakly supervised classifier
-    train_both_weakly = True  # autoencoder + weakly supervised classifier (2 classes)
-    train_cl_with_byol = True  # train the common backbone with self-supervision as in BYOL
+    print('training data:', train_dataset.__len__())
+    print('validation data:', test_dataset.__len__())
 
     device = torch.device('cuda')
-    epochs = 100
 
-    if train_ae_alone:
-        tracemalloc.start()
-        train_autoencoder(epochs, data_loader_train, data_loader_val, device=device)
-        current, peak = tracemalloc.get_traced_memory()
-        print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
-        tracemalloc.stop()
+    tracemalloc.start()
+    train_autoencoder(epochs, data_loader_train, data_loader_val, device=device, run_id=dataset_id)
+    current, peak = tracemalloc.get_traced_memory()
+    print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
+    tracemalloc.stop()
 
-    if train_cl_weakly:
-        tracemalloc.start()
-        train_deep_classifier_weakly(epochs, data_loader_train, data_loader_val, device=device)
-        current, peak = tracemalloc.get_traced_memory()
-        print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
-        tracemalloc.stop()
+    tracemalloc.start()
+    train_deep_classifier_weakly(epochs, data_loader_train, data_loader_val, device=device, run_id=dataset_id)
+    current, peak = tracemalloc.get_traced_memory()
+    print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
+    tracemalloc.stop()
 
-    if train_both_weakly:
-        tracemalloc.start()
-        train_together(epochs, data_loader_train, data_loader_val, device=device)
-        current, peak = tracemalloc.get_traced_memory()
-        print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
-        tracemalloc.stop()
+    tracemalloc.start()
+    train_together(epochs, data_loader_train, data_loader_val, device=device, run_id=dataset_id)
+    current, peak = tracemalloc.get_traced_memory()
+    print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
+    tracemalloc.stop()
 
-    if train_cl_with_byol:
-        # change dataset's transform to identity, as BYOL already has it
-        training_data.dataset.transform = torch.nn.Sequential(torch.nn.Identity())
-        data_loader_train = DataLoader(training_data, batch_size=256, shuffle=True, num_workers=4)
+    tracemalloc.start()
+    run_training_for_64x64_cuts(epochs, data_loader_train, device=device, run_id=dataset_id)
+    current, peak = tracemalloc.get_traced_memory()
+    print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
+    tracemalloc.stop()
 
-        tracemalloc.start()
-        run_training_for_64x64_cuts(epochs, data_loader_train, device=device)
-        current, peak = tracemalloc.get_traced_memory()
-        print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
-        tracemalloc.stop()
+
+if __name__ == "__main__":
+
+    path_to_train_data = 'D:\ETH\projects\morpho-learner\data\\train\\'
+    path_to_test_data = 'D:\ETH\projects\morpho-learner\data\\test\\'
+    crop_size = 64
+    epochs = 5
+    batch_size = 256
+
+    # make datasets with no augmentations and single crops
+    train_no_aug_one_crop = MultiCropDataset(path_to_train_data, [crop_size], [1], [1], [1], no_aug=True)
+    test_no_aug_one_crop = MultiCropDataset(path_to_test_data, [crop_size], [1], [1], [1], no_aug=True)
+    # train
+    train_all_models(epochs, batch_size, train_no_aug_one_crop, test_no_aug_one_crop, dataset_id="no_aug_one_crop")
+
+    # make datasets with SimCLR augmentations and single crops
+    train_aug_one_crop = MultiCropDataset(path_to_train_data, [crop_size], [1], [1], [1], no_aug=False)
+    test_aug_one_crop = MultiCropDataset(path_to_test_data, [crop_size], [1], [1], [1], no_aug=False)
+    # train
+    train_all_models(epochs, batch_size, train_aug_one_crop, test_aug_one_crop, dataset_id='aug_one_crop')
+
+    # make datasets with SimCLR augmentations and multi-crops
+    train_aug_multi_crop = MultiCropDataset(path_to_train_data, [crop_size, crop_size, crop_size], [1, 2, 4], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False)
+    test_aug_multi_crop = MultiCropDataset(path_to_test_data, [crop_size, crop_size, crop_size], [1, 2, 4], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False)
+    # train
+    train_all_models(epochs, batch_size, train_aug_multi_crop, test_aug_multi_crop, dataset_id='aug_multi_crop')
+
+    # make datasets with no augmentations and multi-crops
+    train_no_aug_multi_crop = MultiCropDataset(path_to_train_data, [crop_size, crop_size, crop_size], [1, 2, 4], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=True)
+    test_no_aug_multi_crop = MultiCropDataset(path_to_test_data, [crop_size, crop_size, crop_size], [1, 2, 4], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=True)
+    # train
+    train_all_models(epochs, batch_size, train_no_aug_multi_crop, test_no_aug_multi_crop, dataset_id='no_aug_multi_crop')

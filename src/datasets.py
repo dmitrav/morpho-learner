@@ -1,11 +1,87 @@
-import os, pandas, time, torch, numpy, itertools
-import random
 
+import numpy, random, torch, pandas, os
+from PIL import Image, ImageFilter
 from torch.utils.data import Dataset, DataLoader
+import torchvision.datasets as datasets
+import torchvision.transforms as transforms
 from torchvision.io import read_image
-from PIL import Image
 
 from src import constants
+
+
+class RandomApply(torch.nn.Module):
+    def __init__(self, fn, p):
+        super().__init__()
+        self.fn = fn
+        self.p = p
+
+    def forward(self, x):
+        if random.random() > self.p:
+            return x
+        return self.fn(x)
+
+
+class MultiCropDataset(datasets.ImageFolder):
+    def __init__(
+            self,
+            data_path,
+            size_crops,
+            nmb_crops,
+            min_scale_crops,
+            max_scale_crops,
+            size_dataset=-1,
+            return_index=False,
+            no_aug=True
+    ):
+        super(MultiCropDataset, self).__init__(data_path)
+        assert len(size_crops) == len(nmb_crops)
+        assert len(min_scale_crops) == len(nmb_crops)
+        assert len(max_scale_crops) == len(nmb_crops)
+        if size_dataset >= 0:
+            self.samples = self.samples[:size_dataset]
+        self.return_index = return_index
+        self.no_aug = no_aug
+
+        no_trans = []
+        trans = []
+        for i in range(len(size_crops)):
+            no_trans.extend([
+                             transforms.Compose([
+                                 transforms.RandomResizedCrop(size_crops[i], scale=(min_scale_crops[i], max_scale_crops[i])),
+                                 transforms.Grayscale(num_output_channels=1),
+                                 transforms.ToTensor()
+                             ])
+                         ] * nmb_crops[i]
+            )
+
+            trans.extend([
+                             transforms.Compose([
+                                 transforms.RandomResizedCrop(size_crops[i], scale=(min_scale_crops[i], max_scale_crops[i])),
+                                 transforms.Grayscale(num_output_channels=1),
+                                 transforms.ToTensor(),
+                                 transforms.RandomHorizontalFlip(p=0.5),
+                                 RandomApply(transforms.GaussianBlur((3, 3), (.1, 2.0)), p=0.2),
+                                 transforms.Normalize(mean=torch.tensor([0.449]), std=torch.tensor([0.226]))
+                             ])
+                         ] * nmb_crops[i]
+            )
+
+        self.trans = trans
+        self.no_trans = no_trans
+
+    def __getitem__(self, index):
+        path, label = self.samples[index]
+        image = self.loader(path)
+        if self.no_aug:
+            # apply no augmentations
+            multi_crops = list(map(lambda trans: trans(image), self.no_trans))
+        else:
+            multi_crops = list(map(lambda trans: trans(image), self.trans))
+
+        multi_crops = [(crop, label) for crop in multi_crops]
+        if self.return_index:
+            return index, multi_crops
+        return multi_crops
 
 
 class MultiLabelDataset(Dataset):
@@ -137,3 +213,31 @@ class JointImageDataset(Dataset):
             label = self.target_transform(label)
         sample = (image, label)
         return sample
+
+
+if __name__ == "__main__":
+
+    train_dataset = MultiCropDataset(
+        'D:\ETH\projects\morpho-learner\data\\train\\',
+        [64],  # size_crops
+        [1],  # nmb_crops
+        [1],  # min_scale_crops
+        [1],  # max_scale_crops
+        no_aug=True
+    )
+
+    data_loader_train = DataLoader(train_dataset, batch_size=32, shuffle=False, num_workers=0, pin_memory=True, drop_last=True)
+
+    for batch in data_loader_train:
+        for crops, labels in batch:
+            print(labels)
+        break
+
+    train_dataset.no_aug = False
+
+    for batch in data_loader_train:
+        for crops, labels in batch:
+            print(labels)
+
+    print(5)
+    print()

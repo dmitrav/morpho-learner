@@ -62,8 +62,9 @@ def save_history_and_parameters(loss_history, byol_pars, save_path):
 
 
 def run_training_for_64x64_cuts(epochs, data_loader,
-                                device=torch.device('cuda'), grid=None,
-                                save_path='D:\ETH\projects\morpho-learner\\res\\byol\\'):
+                                device=torch.device('cuda'), grid=None, run_id=""):
+
+    save_path = 'D:\ETH\projects\morpho-learner\\res\\byol\\{}\\'.format(run_id)
 
     model = DeepClassifier().to(device)
 
@@ -93,16 +94,19 @@ def train(model, grid, epochs, data_loader, device, save_path):
                 for epoch in range(epochs):
                     start = time.time()
                     epoch_loss = 0
-                    for batch_features in data_loader:
-                        images = batch_features[0].float().to(device)
-                        loss = learner(images)
-                        epoch_loss += loss.item()
-                        optimizer.zero_grad()
-                        loss.backward()
-                        optimizer.step()
-                        learner.update_moving_average()  # update moving average of teacher encoder and teacher centers
+                    n_crops = 1
+                    for batch in data_loader:
+                        n_crops = len(batch)
+                        for crops, _ in batch:
+                            crops = crops.float().to(device)
+                            loss = learner(crops)
+                            epoch_loss += loss.item()
+                            optimizer.zero_grad()
+                            loss.backward()
+                            optimizer.step()
+                            learner.update_moving_average()  # update moving average of teacher encoder and teacher centers
 
-                    epoch_loss = epoch_loss / len(data_loader)
+                    epoch_loss = epoch_loss / len(data_loader) / n_crops
                     loss_history.append(epoch_loss)
                     print("epoch {}: {} min, loss = {:.4f}".format(epoch + 1, int((time.time() - start) / 60), epoch_loss))
 
@@ -126,11 +130,11 @@ def train(model, grid, epochs, data_loader, device, save_path):
 
             except Exception as e:
                 print('{}/{} failed with {}\n'.format(i + 1, len(grid['id']), e))
-                shutil.rmtree(save_path + id)
+                # shutil.rmtree(save_path + id)
         except Exception as e:
             print('{}/{} failed building byol with {}\n'.format(i + 1, len(grid['id']), e))
             print(traceback.print_exc())
-            shutil.rmtree(save_path + id)
+            # shutil.rmtree(save_path + id)
 
 
 def get_image_tensor(path):
