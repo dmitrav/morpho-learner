@@ -226,6 +226,41 @@ class Backbone_3a(nn.Module):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
 
+class Backbone_3e(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+        self.model = nn.Sequential(
+            nn.Conv2d(1, 32, (3, 3), stride=(1, 1), padding=(1, 1)),
+            nn.ReLU(True),
+            nn.AvgPool2d(2),
+
+            nn.Conv2d(32, 64, (3, 3), stride=(1, 1), padding=(1, 1)),
+            nn.ReLU(True),
+            nn.AvgPool2d(2),
+
+            nn.Conv2d(64, 128, (3, 3), stride=(1, 1), padding=(1, 1)),
+            nn.ReLU(True),
+            nn.AvgPool2d(4),   # 128 x 4 x 4
+
+            nn.Flatten(),
+            nn.Linear(2048, 256),
+            nn.LeakyReLU(True),
+            nn.Linear(256, 2),
+            nn.Softmax(dim=1)
+        )
+
+        print(self)
+        print('number of parameters: {}\n'.format(self.count_parameters()))
+
+    def forward(self, features):
+        return self.model(features)
+
+    def count_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+
 class Backbone_3c(nn.Module):
 
     def __init__(self):
@@ -351,38 +386,37 @@ if __name__ == '__main__':
         T.RandomResizedCrop((64, 64)),
         T.Normalize(mean=torch.tensor([0.449]), std=torch.tensor([0.226]))
     )
+    # define no transform
+    no_transform = torch.nn.Sequential(torch.nn.Identity())
 
     # make a balanced dataset of drugs and controls
-    data = MultiLabelDataset({0: path_to_controls, 1: path_to_drugs}, N=370000, transform=transform)
-    training_data, validation_data = torch.utils.data.random_split(data, [700000, 40000])
-
-    data_loader_train = DataLoader(training_data, batch_size=256, shuffle=True, num_workers=4)
-    data_loader_val = DataLoader(validation_data, batch_size=256, shuffle=True, num_workers=4)
-
-    print('training data:', training_data.__len__())
-    print('validation data:', validation_data.__len__())
+    data = MultiLabelDataset({0: path_to_controls, 1: path_to_drugs}, shuffle=True)
+    training_data, validation_data = torch.utils.data.random_split(data, [700000, 99577])
 
     device = torch.device('cuda')
-    epochs = 50
+    epochs = 20
 
     models = [
-        Backbone,
-        Backbone_2a,
-        Backbone_2b,
-        Backbone_2c,
-        Backbone_2d,
-        Backbone_3a,
-        Backbone_3b,
-        Backbone_3c,
-        Backbone_3d
+        Backbone_3e,
+        Backbone_3a
     ]
 
-    for model in models:
+    for T in [no_transform, transform]:
 
-        model = model().to(device)
+        training_data.dataset.transform = T
+        validation_data.dataset.transform = T
+        data_loader_train = DataLoader(training_data, batch_size=256, shuffle=False, num_workers=4)
+        data_loader_val = DataLoader(validation_data, batch_size=256, shuffle=False, num_workers=4)
 
-        tracemalloc.start()
-        trainer.train_deep_classifier_weakly(epochs, data_loader_train, data_loader_val, trained_cl=model, device=device)
-        current, peak = tracemalloc.get_traced_memory()
-        print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
-        tracemalloc.stop()
+        print('training data:', training_data.__len__())
+        print('validation data:', validation_data.__len__())
+
+        for model in models:
+
+            model = model().to(device)
+
+            tracemalloc.start()
+            trainer.train_deep_classifier_weakly(epochs, data_loader_train, data_loader_val, trained_cl=model, device=device)
+            current, peak = tracemalloc.get_traced_memory()
+            print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
+            tracemalloc.stop()

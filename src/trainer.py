@@ -324,7 +324,7 @@ def train_deep_classifier_weakly(epochs, loader_train, loader_val,
     else:
         model = DeepClassifier().to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=0.0005)
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)
     criterion = nn.CrossEntropyLoss()
 
     last_epoch_acc = run_weakly_supervised_classifier_training(loader_train, loader_val,

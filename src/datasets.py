@@ -10,7 +10,7 @@ from src import constants
 
 class MultiLabelDataset(Dataset):
 
-    def __init__(self, label_dir_map, N=None, transform=None, target_transform=None):
+    def __init__(self, label_dir_map, N=None, shuffle=False, transform=None, target_transform=None):
 
         self.label_dir_map = label_dir_map
         self.transform = transform
@@ -23,18 +23,22 @@ class MultiLabelDataset(Dataset):
             all_imgs = os.listdir(directory)
             all_labels = [label for x in all_imgs]
 
-            # keep only n random (for balancing the data)
-            n_random_indices = numpy.array(random.sample(range(len(all_imgs)), N))
-            n_random_imgs = numpy.array(all_imgs)[n_random_indices]
-            corresponding_labels = numpy.array(all_labels)[n_random_indices]
+            if N is not None:
+                # keep only n random (for balancing the data)
+                n_random_indices = numpy.array(random.sample(range(len(all_imgs)), N))
+                all_imgs = list(numpy.array(all_imgs)[n_random_indices])
+                all_labels = list(numpy.array(all_labels)[n_random_indices])
 
-            imgs.extend(list(n_random_imgs))
-            labels.extend(list(corresponding_labels))
+            imgs.extend(all_imgs)
+            labels.extend(all_labels)
 
         self.img_labels = pandas.DataFrame({
             'img': imgs,
             'label': labels
         })
+
+        if shuffle:
+            self.img_labels = self.img_labels.sample(frac=1)
 
     def __len__(self):
         return len(self.img_labels)
