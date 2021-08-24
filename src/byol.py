@@ -183,7 +183,3 @@ def get_accuracy(model,
 
 if __name__ == '__main__':
     pass
-
-    # TODO:
-    #  - try weight decay,
-    #  - try Lars optimizer and full BYOL paper set-up

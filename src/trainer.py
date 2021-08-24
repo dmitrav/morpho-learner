@@ -327,12 +327,12 @@ def train_autoencoder(epochs, data_loader_train, data_loader_val, trained_ae=Non
         model = Autoencoder().to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
-    criterion = nn.MSELoss()
+    criterion = nn.BCELoss()
 
     last_rec_loss = run_autoencoder_training(data_loader_train, data_loader_val, model, optimizer, criterion, device, epochs=epochs)
 
     save_path = save_path.replace('ae', 'ae_{}'.format(round(last_rec_loss, 4)))
-    plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=30)
+    plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=10)
 
     torch.save(model.state_dict(), save_path + 'autoencoder.torch')
 
@@ -372,7 +372,7 @@ def train_together(epochs, loader_train, loader_val,
         ae = Autoencoder().to(device)
 
     ae_optimizer = optim.Adam(ae.parameters(), lr=0.0001)
-    ae_criterion = nn.MSELoss()
+    ae_criterion = nn.BCELoss()
 
     if trained_cl is not None:
         cl = trained_cl
@@ -389,7 +389,7 @@ def train_together(epochs, loader_train, loader_val,
 
     save_path = save_path.replace('aecl', 'aecl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
 
-    plot_reconstruction(loader_train, ae, save_to=save_path, n_images=30)
+    plot_reconstruction(loader_train, ae, save_to=save_path, n_images=10)
     torch.save(ae.state_dict(), save_path + 'ae.torch')
     torch.save(cl.state_dict(), save_path + 'cl.torch')
 
@@ -407,25 +407,25 @@ def train_all_models(epochs, batch_size, train_dataset, test_dataset, dataset_id
     tracemalloc.start()
     train_autoencoder(epochs, data_loader_train, data_loader_val, device=device, run_id=dataset_id)
     current, peak = tracemalloc.get_traced_memory()
-    print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
+    print('current: {} MB, peak: {} MB\n'.format(current / 10 ** 6, peak / 10 ** 6))
     tracemalloc.stop()
 
     tracemalloc.start()
     train_deep_classifier_weakly(epochs, data_loader_train, data_loader_val, device=device, run_id=dataset_id)
     current, peak = tracemalloc.get_traced_memory()
-    print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
+    print('current: {} MB, peak: {} MB\n'.format(current / 10 ** 6, peak / 10 ** 6))
     tracemalloc.stop()
 
     tracemalloc.start()
     train_together(epochs, data_loader_train, data_loader_val, device=device, run_id=dataset_id)
     current, peak = tracemalloc.get_traced_memory()
-    print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
+    print('current: {} MB, peak: {} MB\n'.format(current / 10 ** 6, peak / 10 ** 6))
     tracemalloc.stop()
 
     tracemalloc.start()
     run_training_for_64x64_cuts(epochs, data_loader_train, device=device, run_id=dataset_id)
     current, peak = tracemalloc.get_traced_memory()
-    print('current: {} MB, peak: {} MB'.format(current / 10 ** 6, peak / 10 ** 6))
+    print('current: {} MB, peak: {} MB\n'.format(current / 10 ** 6, peak / 10 ** 6))
     tracemalloc.stop()
 
 
@@ -434,12 +434,14 @@ if __name__ == "__main__":
     path_to_train_data = 'D:\ETH\projects\morpho-learner\data\\train\\'
     path_to_test_data = 'D:\ETH\projects\morpho-learner\data\\test\\'
     crop_size = 64
-    epochs = 3
+    epochs = 50
     batch_size = 256
+    train_size = -1
+    test_size = -1
 
     # make datasets with no augmentations and single crops
-    train_no_aug_one_crop = MultiCropDataset(path_to_train_data, [crop_size], [1], [1], [1], no_aug=True)
-    test_no_aug_one_crop = MultiCropDataset(path_to_test_data, [crop_size], [1], [1], [1], no_aug=True)
+    train_no_aug_one_crop = MultiCropDataset(path_to_train_data, [crop_size], [1], [1], [1], no_aug=True, size_dataset=train_size)
+    test_no_aug_one_crop = MultiCropDataset(path_to_test_data, [crop_size], [1], [1], [1], no_aug=True, size_dataset=test_size)
     # train
     train_all_models(epochs, batch_size, train_no_aug_one_crop, test_no_aug_one_crop, dataset_id="no_aug_one_crop")
 
@@ -450,13 +452,13 @@ if __name__ == "__main__":
     train_all_models(epochs, batch_size, train_aug_one_crop, test_aug_one_crop, dataset_id='aug_one_crop')
 
     # make datasets with SimCLR augmentations and multi-crops
-    train_aug_multi_crop = MultiCropDataset(path_to_train_data, [crop_size, crop_size, crop_size], [1, 2, 4], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False)
-    test_aug_multi_crop = MultiCropDataset(path_to_test_data, [crop_size, crop_size, crop_size], [1, 2, 4], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False)
+    train_aug_multi_crop = MultiCropDataset(path_to_train_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False)
+    test_aug_multi_crop = MultiCropDataset(path_to_test_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False)
     # train
     train_all_models(epochs, batch_size, train_aug_multi_crop, test_aug_multi_crop, dataset_id='aug_multi_crop')
 
     # make datasets with no augmentations and multi-crops
-    train_no_aug_multi_crop = MultiCropDataset(path_to_train_data, [crop_size, crop_size, crop_size], [1, 2, 4], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=True)
-    test_no_aug_multi_crop = MultiCropDataset(path_to_test_data, [crop_size, crop_size, crop_size], [1, 2, 4], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=True)
+    train_no_aug_multi_crop = MultiCropDataset(path_to_train_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=True)
+    test_no_aug_multi_crop = MultiCropDataset(path_to_test_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=True)
     # train
     train_all_models(epochs, batch_size, train_no_aug_multi_crop, test_no_aug_multi_crop, dataset_id='no_aug_multi_crop')

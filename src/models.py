@@ -9,35 +9,37 @@ class Autoencoder(nn.Module):
 
     def __init__(self):
         super().__init__()
-
         self.encoder = nn.Sequential(
-            nn.Conv2d(1, 32, (3, 3), stride=(1, 1), padding=(1, 1)),
+            nn.Conv2d(1, 64, (3,3), stride=(1,1), padding=(1,1)),
             nn.ReLU(True),
             nn.MaxPool2d(2),
 
-            nn.Conv2d(32, 64, (3, 3), stride=(1, 1), padding=(1, 1)),
+            nn.Conv2d(64, 32, (3,3), stride=(1,1), padding=(1,1)),
             nn.ReLU(True),
             nn.MaxPool2d(2),
 
-            nn.Conv2d(64, 128, (3, 3), stride=(1, 1), padding=(1, 1)),
+            nn.Conv2d(32, 16, (3,3), stride=(1,1), padding=(1,1)),
             nn.ReLU(True),
-            nn.MaxPool2d(4),  # 128 x 4 x 4
+
+            nn.Conv2d(16, 8, (3,3), stride=(1,1), padding=(1,1))
         )
 
         self.decoder = nn.Sequential(
 
-            nn.Upsample(scale_factor=4),
-            nn.ConvTranspose2d(128, 64, (3,3), stride=(1,1), padding=(1,1)),
+            nn.ConvTranspose2d(8, 32, (3,3), stride=(1,1), padding=(1,1)),
+            nn.ReLU(True),
+            nn.Upsample(scale_factor=2),
+
+            nn.ConvTranspose2d(32, 64, (3,3), stride=(1,1), padding=(1,1)),
+            nn.ReLU(True),
+            nn.Upsample(scale_factor=2),
+
+            nn.ConvTranspose2d(64, 64, (3, 3), stride=(1, 1), padding=(1, 1)),
             nn.ReLU(True),
 
-            nn.Upsample(scale_factor=2),
-            nn.ConvTranspose2d(64, 32, (3,3), stride=(1,1), padding=(1,1)),
-            nn.ReLU(True),
-
-            nn.Upsample(scale_factor=2),
-            nn.ConvTranspose2d(32, 1, (3, 3), stride=(1,1), padding=(1,1))
+            nn.ConvTranspose2d(64, 1, (3, 3), stride=(1, 1), padding=(1, 1)),
+            nn.Sigmoid()
         )
-
         print(self)
         print('number of parameters: {}\n'.format(self.count_parameters()))
 
@@ -56,17 +58,18 @@ class DeepClassifier(nn.Module):
         super().__init__()
 
         self.model = nn.Sequential(
-            nn.Conv2d(1, 32, (3, 3), stride=(1, 1), padding=(1, 1)),
+            nn.Conv2d(1, 64, (3, 3), stride=(1, 1), padding=(1, 1)),
             nn.ReLU(True),
             nn.MaxPool2d(2),
 
-            nn.Conv2d(32, 64, (3, 3), stride=(1, 1), padding=(1, 1)),
+            nn.Conv2d(64, 32, (3, 3), stride=(1, 1), padding=(1, 1)),
             nn.ReLU(True),
             nn.MaxPool2d(2),
 
-            nn.Conv2d(64, 128, (3, 3), stride=(1, 1), padding=(1, 1)),
+            nn.Conv2d(32, 16, (3, 3), stride=(1, 1), padding=(1, 1)),
             nn.ReLU(True),
-            nn.MaxPool2d(4),  # 128 x 4 x 4
+
+            nn.Conv2d(16, 8, (3, 3), stride=(1, 1), padding=(1, 1)),  # 8 x 16 x 16
 
             nn.Flatten(),
             nn.Linear(2048, 256),

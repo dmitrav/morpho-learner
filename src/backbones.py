@@ -21,6 +21,7 @@ from src import constants, trainer
 
 
 class Backbone(nn.Module):
+    # best for reconstruction & binary classification
 
     def __init__(self):
         super().__init__()
@@ -192,6 +193,7 @@ class Backbone_2d(nn.Module):
 
 
 class Backbone_3a(nn.Module):
+    # best for binary classification
 
     def __init__(self):
         super().__init__()
