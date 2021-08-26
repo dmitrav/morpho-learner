@@ -60,8 +60,7 @@ class MultiCropDataset(datasets.ImageFolder):
                                  transforms.Grayscale(num_output_channels=1),
                                  transforms.ToTensor(),
                                  transforms.RandomHorizontalFlip(p=0.5),
-                                 RandomApply(transforms.GaussianBlur((3, 3), (.1, 2.0)), p=0.2),
-                                 transforms.Normalize(mean=torch.tensor([0.449]), std=torch.tensor([0.226]))
+                                 RandomApply(transforms.GaussianBlur((3, 3), (.1, 2.0)), p=0.2)
                              ])
                          ] * nmb_crops[i]
             )

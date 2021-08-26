@@ -115,7 +115,7 @@ def train(model, grid, epochs, data_loader, device, save_path):
                         scheduler.step()
 
                     # save network
-                    torch.save(model.state_dict(), save_path + id + '\\byol_at_{}.torch'.format(epoch))
+                    torch.save(model.state_dict(), save_path + id + '\\byol_at_{}.torch'.format(epoch+1))
 
                     if epoch >= 2:
                         if epoch_loss > loss_history[epoch - 1] > loss_history[epoch - 2] or epoch_loss > loss_history[0]:

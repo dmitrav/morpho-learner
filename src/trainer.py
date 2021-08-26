@@ -25,10 +25,11 @@ class RandomApply(nn.Module):
         return self.fn(x)
 
 
-def run_autoencoder_training(data_loader_train, data_loader_test, model, optimizer, criterion, device, lr_scheduler=None, epochs=10):
+def run_autoencoder_training(data_loader_train, data_loader_test, model, optimizer, criterion, device,
+                             lr_scheduler=None, epochs=10, save_path="..\\res\\"):
 
-    loss = 0
-    val_loss = 0
+    loss_history = []
+    val_loss_history = []
     for epoch in range(epochs):
 
         start = time.time()
@@ -55,6 +56,7 @@ def run_autoencoder_training(data_loader_train, data_loader_test, model, optimiz
 
         # compute the epoch training loss
         loss = loss / len(data_loader_train) / n_crops
+        loss_history.append(loss)
 
         val_loss = 0
         n_crops = 1
@@ -67,6 +69,7 @@ def run_autoencoder_training(data_loader_train, data_loader_test, model, optimiz
 
         # compute the epoch training loss
         val_loss = val_loss / len(data_loader_test) / n_crops
+        val_loss_history.append(val_loss)
 
         # update lr
         if lr_scheduler is not None:
@@ -74,15 +77,20 @@ def run_autoencoder_training(data_loader_train, data_loader_test, model, optimiz
 
         # display the epoch training loss
         print("epoch {}/{}: {} min, loss = {:.4f}, val_loss = {:.4f}".format(epoch + 1, epochs, int((time.time() - start) / 60), loss, val_loss))
+        # save model
+        torch.save(model.state_dict(), save_path + 'autoencoder_at_{}.torch'.format(epoch+1))
 
-    return loss
+    return loss_history, val_loss_history
 
 
 def run_weakly_supervised_classifier_training(loader_train, loader_val, model, optimizer, criterion, device,
-                                              lr_scheduler=None, epochs=10):
+                                              lr_scheduler=None, epochs=10, save_path='..\\res\\'):
+
     f_acc = Accuracy().to(device)
 
     acc, val_acc = 0, -1
+    acc_history = []
+    val_acc_history = []
     for epoch in range(epochs):
 
         start = time.time()
@@ -115,6 +123,7 @@ def run_weakly_supervised_classifier_training(loader_train, loader_val, model, o
         loss = loss / len(loader_train) / n_crops
         # compute epoch training accuracy
         acc = acc / len(loader_train) / n_crops
+        acc_history.append(acc)
 
         val_acc = 0
         n_crops = 1
@@ -129,6 +138,7 @@ def run_weakly_supervised_classifier_training(loader_train, loader_val, model, o
 
         # compute epoch training accuracy
         val_acc = val_acc / len(loader_val) / n_crops
+        val_acc_history.append(val_acc)
 
         # update lr
         if lr_scheduler is not None:
@@ -136,8 +146,9 @@ def run_weakly_supervised_classifier_training(loader_train, loader_val, model, o
 
         # display the epoch training loss
         print("epoch {}/{}: {} min, loss = {:.4f}, acc = {:.4f}, val_acc = {:.4f}".format(epoch + 1, epochs, int((time.time() - start) / 60), loss, acc, val_acc))
+        torch.save(model.state_dict(), save_path + 'deep_classifier_at_{}.torch'.format(epoch+1))
 
-    return acc
+    return acc_history, val_acc_history
 
 
 def run_supervised_classifier_training(loader_train, model, optimizer, criterion, device,
@@ -195,12 +206,15 @@ def run_supervised_classifier_training(loader_train, model, optimizer, criterion
 
 
 def run_simultaneous_training(loader_train, loader_val, ae_model, ae_optimizer, ae_criterion, cl_model, cl_optimizer, cl_criterion,
-                              device, epochs=10, ae_scheduler=None, cl_scheduler=None):
+                              device, epochs=10, ae_scheduler=None, cl_scheduler=None, save_path="..\\res\\"):
 
     f_acc = Accuracy().to(device)
 
     rec_loss_epoch = 0
     acc_epoch = 0
+    rec_loss_history = []
+    loss_history = []
+    acc_history = []
     for epoch in range(epochs):
 
         start = time.time()
@@ -261,6 +275,9 @@ def run_simultaneous_training(loader_train, loader_val, ae_model, ae_optimizer, 
         cl_loss_epoch = cl_loss_epoch / len(loader_train) / n_crops
         rec_loss_epoch = rec_loss_epoch / len(loader_train) / n_crops
         acc_epoch = acc_epoch / len(loader_train) / n_crops
+        rec_loss_history.append(rec_loss_epoch)
+        acc_history.append(acc_epoch)
+        loss_history.append(ae_loss_epoch)
 
         val_acc = 0
         n_crops = 1
@@ -288,7 +305,10 @@ def run_simultaneous_training(loader_train, loader_val, ae_model, ae_optimizer, 
         print("epoch {}/{}: {} min, ae_loss = {:.4f}, cl_loss = {:.4f}, rec_loss = {:.4f}, acc = {:.4f}, val_acc = {:.4f}"
               .format(epoch + 1, epochs, int((time.time() - start) / 60), ae_loss_epoch, cl_loss_epoch, rec_loss_epoch, acc_epoch, val_acc))
 
-    return rec_loss_epoch, acc_epoch
+        torch.save(ae_model.state_dict(), save_path + 'autoencoder_at_{}.torch'.format(epoch+1))
+        torch.save(cl_model.state_dict(), save_path + 'classifier_at_{}.torch'.format(epoch+1))
+
+    return rec_loss_history, loss_history, acc_history
 
 
 def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10):
@@ -320,6 +340,8 @@ def plot_reconstruction(data_loader, trained_model, save_to='res/', n_images=10)
 def train_autoencoder(epochs, data_loader_train, data_loader_val, trained_ae=None, device=torch.device('cuda'), run_id=""):
 
     save_path = 'D:\ETH\projects\morpho-learner\\res\\ae\\{}\\'.format(run_id)
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
 
     if trained_ae is not None:
         model = trained_ae
@@ -329,17 +351,21 @@ def train_autoencoder(epochs, data_loader_train, data_loader_val, trained_ae=Non
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
     criterion = nn.BCELoss()
 
-    last_rec_loss = run_autoencoder_training(data_loader_train, data_loader_val, model, optimizer, criterion, device, epochs=epochs)
+    rec_loss, val_rec_loss = run_autoencoder_training(data_loader_train, data_loader_val, model, optimizer, criterion, device,
+                                                      epochs=epochs, save_path=save_path)
 
-    save_path = save_path.replace('ae', 'ae_{}'.format(round(last_rec_loss, 4)))
+    # save history
+    history = pandas.DataFrame({'epoch': [x + 1 for x in range(len(rec_loss))], 'loss': rec_loss, 'val_loss': val_rec_loss})
+    history.to_csv(save_path + '\\history.csv', index=False)
+    # save reconstruction
     plot_reconstruction(data_loader_train, model, save_to=save_path, n_images=10)
-
-    torch.save(model.state_dict(), save_path + 'autoencoder.torch')
 
 
 def train_deep_classifier_weakly(epochs, loader_train, loader_val, trained_cl=None, device=torch.device('cuda'), run_id=""):
 
     save_path = 'D:\ETH\projects\morpho-learner\\res\\cl\\{}\\'.format(run_id)
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
 
     if trained_cl is not None:
         model = trained_cl
@@ -349,22 +375,22 @@ def train_deep_classifier_weakly(epochs, loader_train, loader_val, trained_cl=No
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
     criterion = nn.CrossEntropyLoss()
 
-    last_epoch_acc = run_weakly_supervised_classifier_training(loader_train, loader_val,
+    acc, val_acc = run_weakly_supervised_classifier_training(loader_train, loader_val,
                                                                model, optimizer, criterion, device,
-                                                               epochs=epochs)
+                                                               epochs=epochs,
+                                                             save_path=save_path)
 
-    save_path = save_path.replace('cl', 'cl_{}'.format(round(last_epoch_acc, 4)))
-
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-
-    torch.save(model.state_dict(), save_path + 'deep_classifier.torch')
+    # save history
+    history = pandas.DataFrame({'epoch': [x + 1 for x in range(len(acc))], 'acc': acc, 'val_acc': val_acc})
+    history.to_csv(save_path + '\\history.csv', index=False)
 
 
 def train_together(epochs, loader_train, loader_val,
                    trained_ae=None, trained_cl=None, device=torch.device('cuda'), run_id=''):
 
     save_path = 'D:\ETH\projects\morpho-learner\\res\\aecl\\{}\\'.format(run_id)
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
 
     if trained_ae is not None:
         ae = trained_ae
@@ -382,16 +408,16 @@ def train_together(epochs, loader_train, loader_val,
     cl_optimizer = optim.Adam(cl.parameters(), lr=0.0001)
     cl_criterion = nn.CrossEntropyLoss()
 
-    last_rec_loss, last_acc = run_simultaneous_training(loader_train, loader_val,
+    rec_loss, loss, acc = run_simultaneous_training(loader_train, loader_val,
                                                         ae, ae_optimizer, ae_criterion,
                                                         cl, cl_optimizer, cl_criterion,
-                                                        device, epochs=epochs)
+                                                        device, epochs=epochs, save_path=save_path)
 
-    save_path = save_path.replace('aecl', 'aecl_{}_{}'.format(round(last_rec_loss, 4), round(last_acc, 4)))
+    # save history
+    history = pandas.DataFrame({'epoch': [x + 1 for x in range(len(acc))], 'rec_loss': rec_loss, 'loss': loss, 'acc': acc})
+    history.to_csv(save_path + '\\history.csv', index=False)
 
     plot_reconstruction(loader_train, ae, save_to=save_path, n_images=10)
-    torch.save(ae.state_dict(), save_path + 'ae.torch')
-    torch.save(cl.state_dict(), save_path + 'cl.torch')
 
 
 def train_all_models(epochs, batch_size, train_dataset, test_dataset, dataset_id):
@@ -404,29 +430,10 @@ def train_all_models(epochs, batch_size, train_dataset, test_dataset, dataset_id
 
     device = torch.device('cuda')
 
-    tracemalloc.start()
     train_autoencoder(epochs, data_loader_train, data_loader_val, device=device, run_id=dataset_id)
-    current, peak = tracemalloc.get_traced_memory()
-    print('current: {} MB, peak: {} MB\n'.format(current / 10 ** 6, peak / 10 ** 6))
-    tracemalloc.stop()
-
-    tracemalloc.start()
     train_deep_classifier_weakly(epochs, data_loader_train, data_loader_val, device=device, run_id=dataset_id)
-    current, peak = tracemalloc.get_traced_memory()
-    print('current: {} MB, peak: {} MB\n'.format(current / 10 ** 6, peak / 10 ** 6))
-    tracemalloc.stop()
-
-    tracemalloc.start()
     train_together(epochs, data_loader_train, data_loader_val, device=device, run_id=dataset_id)
-    current, peak = tracemalloc.get_traced_memory()
-    print('current: {} MB, peak: {} MB\n'.format(current / 10 ** 6, peak / 10 ** 6))
-    tracemalloc.stop()
-
-    tracemalloc.start()
     run_training_for_64x64_cuts(epochs, data_loader_train, device=device, run_id=dataset_id)
-    current, peak = tracemalloc.get_traced_memory()
-    print('current: {} MB, peak: {} MB\n'.format(current / 10 ** 6, peak / 10 ** 6))
-    tracemalloc.stop()
 
 
 if __name__ == "__main__":
@@ -439,26 +446,26 @@ if __name__ == "__main__":
     train_size = -1
     test_size = -1
 
+    print("\n\n===== NO_AUG_ONE_CROP =====\n\n")
     # make datasets with no augmentations and single crops
     train_no_aug_one_crop = MultiCropDataset(path_to_train_data, [crop_size], [1], [1], [1], no_aug=True, size_dataset=train_size)
     test_no_aug_one_crop = MultiCropDataset(path_to_test_data, [crop_size], [1], [1], [1], no_aug=True, size_dataset=test_size)
-    # train
     train_all_models(epochs, batch_size, train_no_aug_one_crop, test_no_aug_one_crop, dataset_id="no_aug_one_crop")
 
+    print("\n\n===== AUG_ONE_CROP =====\n\n")
     # make datasets with SimCLR augmentations and single crops
-    train_aug_one_crop = MultiCropDataset(path_to_train_data, [crop_size], [1], [1], [1], no_aug=False)
-    test_aug_one_crop = MultiCropDataset(path_to_test_data, [crop_size], [1], [1], [1], no_aug=False)
-    # train
+    train_aug_one_crop = MultiCropDataset(path_to_train_data, [crop_size], [1], [1], [1], no_aug=False, size_dataset=train_size)
+    test_aug_one_crop = MultiCropDataset(path_to_test_data, [crop_size], [1], [1], [1], no_aug=False, size_dataset=test_size)
     train_all_models(epochs, batch_size, train_aug_one_crop, test_aug_one_crop, dataset_id='aug_one_crop')
 
+    print("\n\n===== AUG_MULTI_CROP =====\n\n")
     # make datasets with SimCLR augmentations and multi-crops
-    train_aug_multi_crop = MultiCropDataset(path_to_train_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False)
-    test_aug_multi_crop = MultiCropDataset(path_to_test_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False)
-    # train
+    train_aug_multi_crop = MultiCropDataset(path_to_train_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False, size_dataset=train_size)
+    test_aug_multi_crop = MultiCropDataset(path_to_test_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False, size_dataset=test_size)
     train_all_models(epochs, batch_size, train_aug_multi_crop, test_aug_multi_crop, dataset_id='aug_multi_crop')
 
+    print("\n\n===== NO_AUG_MULTI_CROP =====\n\n")
     # make datasets with no augmentations and multi-crops
-    train_no_aug_multi_crop = MultiCropDataset(path_to_train_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=True)
-    test_no_aug_multi_crop = MultiCropDataset(path_to_test_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=True)
-    # train
+    train_no_aug_multi_crop = MultiCropDataset(path_to_train_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=True, size_dataset=train_size)
+    test_no_aug_multi_crop = MultiCropDataset(path_to_test_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=True, size_dataset=test_size)
     train_all_models(epochs, batch_size, train_no_aug_multi_crop, test_no_aug_multi_crop, dataset_id='no_aug_multi_crop')
