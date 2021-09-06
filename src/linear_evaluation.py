@@ -158,4 +158,4 @@ if __name__ == '__main__':
     for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
         for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
 
-            acc, val_acc = train_classifier_with_pretrained_encoder(50, model, setting, batch_size=1024)
+            acc, val_acc = train_classifier_with_pretrained_encoder(100, model, setting, batch_size=1024)
