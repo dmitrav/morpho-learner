@@ -153,13 +153,19 @@ def run_weakly_supervised_classifier_training(loader_train, loader_val, model, o
 
 def run_supervised_classifier_training(loader_train, model, optimizer, criterion, device,
                                        lr_scheduler=None, epochs=10, test_loader=None, save_to=""):
+
     f_acc = Accuracy().to(device)
     f_rec = Recall(num_classes=2, average='weighted').to(device)
     f_prec = Precision(num_classes=2, average='weighted').to(device)
-    f_spec = Specificity(num_classes=2, average='weighted').to(device)
+    f_spec = Specificity(num_classes=2, average='macro').to(device)
 
     print("training started...")
     train_acc, val_acc = 0, -1
+    train_acc_history, val_acc_history = [], []
+    train_rec_history, val_rec_history = [], []
+    train_prec_history, val_prec_history = [], []
+    train_spec_history, val_spec_history = [], []
+    train_f1_history, val_f1_history = [], []
     for epoch in range(epochs):
 
         start = time.time()
@@ -198,6 +204,11 @@ def run_supervised_classifier_training(loader_train, model, optimizer, criterion
         train_rec = train_rec / len(loader_train)
         train_prec = train_prec / len(loader_train)
         train_spec = train_spec / len(loader_train)
+        train_acc_history.append(train_acc)
+        train_rec_history.append(train_rec)
+        train_prec_history.append(train_prec)
+        train_spec_history.append(train_spec)
+        train_f1_history.append(2 * train_rec * train_prec / (train_prec + train_rec))
 
         if test_loader is not None:
             val_acc = 0
@@ -217,6 +228,11 @@ def run_supervised_classifier_training(loader_train, model, optimizer, criterion
             val_rec = val_rec / len(test_loader)
             val_prec = val_prec / len(test_loader)
             val_spec = val_spec / len(test_loader)
+            val_acc_history.append(val_acc)
+            val_rec_history.append(val_rec)
+            val_prec_history.append(val_prec)
+            val_spec_history.append(val_spec)
+            val_f1_history.append(2 * val_rec * val_prec / (val_prec + val_rec))
 
         # update lr
         if lr_scheduler is not None:
@@ -232,6 +248,15 @@ def run_supervised_classifier_training(loader_train, model, optimizer, criterion
               "spec = {:.4f}, val_spec = {:.4f}\n"
               .format(epoch + 1, epochs, int(time.time() - start), loss,
                       train_acc, val_acc, train_rec, val_rec, train_prec, val_prec, train_spec, val_spec))
+
+    history = pandas.DataFrame({'epoch': [x + 1 for x in range(len(val_acc_history))],
+                                'accuracy': train_acc_history, 'val_accuracy': val_acc_history,
+                                'recall': train_rec_history, 'val_recall': val_rec_history,
+                                'precision': train_rec_history, 'val_precision': val_prec_history,
+                                'specificity': train_spec_history, 'val_specificity': val_spec_history,
+                                'f1': train_f1_history, 'val_f1': val_f1_history})
+
+    history.to_csv(save_to + 'history.csv', index=False)
 
     return train_acc, val_acc
 

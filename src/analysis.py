@@ -485,7 +485,7 @@ def plot_cell_line_clustering_with_random_cluster_composition(cell_line, min_clu
 def get_f_transform(model, setting, device):
 
     if model == 'unsupervised':
-        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae\\{}\\'.format(setting)
+        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\training\\ae\\{}\\'.format(setting)
         model = Autoencoder().to(device)
         # load a trained autoencoder to use it in the transform
         model.load_state_dict(torch.load(path_to_ae_model + 'best.torch', map_location=device))
@@ -494,7 +494,7 @@ def get_f_transform(model, setting, device):
         transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
     elif model == 'self-supervised':
-        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\byol\\{}\\'.format(setting)
+        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\training\\byol\\{}\\'.format(setting)
         model = DeepClassifier().to(device)
         # load a trained deep classifier to use it in the transform
         model.load_state_dict(torch.load(path_to_cl_model + 'best.torch', map_location=device))
@@ -505,7 +505,7 @@ def get_f_transform(model, setting, device):
         transform = lambda x: model(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
     elif model == 'weakly-supervised':
-        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\cl\\{}\\'.format(setting)
+        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\training\\cl\\{}\\'.format(setting)
         model = DeepClassifier().to(device)
         # load a trained deep classifier to use it in the transform
         model.load_state_dict(torch.load(path_to_cl_model + 'best.torch', map_location=device))
@@ -516,7 +516,7 @@ def get_f_transform(model, setting, device):
         transform = lambda x: model(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
     elif model == 'regularized':
-        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl\\{}\\'.format(setting)
+        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\training\\aecl\\{}\\'.format(setting)
         model = Autoencoder().to(device)
         # load a trained autoencoder to use it in the transform
         model.load_state_dict(torch.load(path_to_ae_model + 'best.torch', map_location=device))
