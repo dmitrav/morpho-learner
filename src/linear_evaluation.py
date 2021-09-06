@@ -6,49 +6,53 @@ from torchvision.io import read_image
 from torchmetrics import Accuracy
 from PIL import Image
 
-from src.models import DrugClassifier, CellClassifier, Classifier
+from src.models import Classifier
 from src.analysis import get_f_transform, get_image_encodings_from_path
 from src.trainer import run_supervised_classifier_training
 from src import constants
 
 
-def train_classifier_with_pretrained_encoder(epochs, model_name, batch_size=256):
+def train_classifier_with_pretrained_encoder(epochs, model_name, setting_name, batch_size=256):
 
-    path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
-    path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
-    save_path = 'D:\ETH\projects\morpho-learner\\res\\linear_evaluation\\'
+    path_to_drugs_train = 'D:\ETH\projects\morpho-learner\data\\train\\drugs\\'
+    path_to_controls_train = 'D:\ETH\projects\morpho-learner\data\\train\\controls\\'
+    path_to_drugs_test = 'D:\ETH\projects\morpho-learner\data\\test\\drugs\\'
+    path_to_controls_test = 'D:\ETH\projects\morpho-learner\data\\test\\controls\\'
+
+    save_path = 'D:\ETH\projects\morpho-learner\\res\\linear_evaluation\\{}\\{}\\'.format(model_name, setting_name)
 
     device = torch.device('cuda')
-    transform = get_f_transform(model_name, device)
+    transform = get_f_transform(model_name, setting_name, device)
 
     # collect learned representations
-    drugs_encodings, drugs_ids = get_image_encodings_from_path(path_to_drugs, "", transform, n=350000)
-    controls_encodings, controls_ids = get_image_encodings_from_path(path_to_controls, "", transform, n=350000)
-    encodings = numpy.array([*drugs_encodings, *controls_encodings])
-    labels = [*[0 for x in range(len(drugs_encodings))], *[1 for x in range(len(controls_encodings))]]
+    drugs_train, _ = get_image_encodings_from_path(path_to_drugs_train, "", transform)
+    controls_train, _ = get_image_encodings_from_path(path_to_controls_train, "", transform)
+    drugs_test, _ = get_image_encodings_from_path(path_to_drugs_test, "", transform)
+    controls_test, _ = get_image_encodings_from_path(path_to_controls_test, "", transform)
 
-    # split to train and test
-    x_train, y_train, x_test, y_test = preprocess_data(encodings, labels, split_percent=0.8)
+    print("train set: {} drugs, {} controls".format(len(drugs_train), len(controls_train)))
+    print("test set: {} drugs, {} controls".format(len(drugs_test), len(controls_test)))
+
+    x_train = [*drugs_train, *controls_train]
+    y_train = [*[1 for x in range(len(drugs_train))], *[0 for x in range(len(controls_train))]]
+    x_test = [*drugs_test, *controls_test]
+    y_test = [*[1 for x in range(len(drugs_test))], *[0 for x in range(len(controls_test))]]
 
     # make datasets
     train_dataset = TensorDataset(torch.Tensor(x_train), torch.LongTensor(y_train))
     test_dataset = TensorDataset(torch.Tensor(x_test), torch.LongTensor(y_test))
-    train_loader = DataLoader(train_dataset, batch_size=batch_size)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
     model = Classifier().to(device)
-
-    optimizer = optim.SGD(model.parameters(), lr=0.005, momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     criterion = nn.CrossEntropyLoss()
 
-    last_train_acc, last_val_acc = run_supervised_classifier_training(train_loader, model, optimizer, criterion, device,
-                                                                      epochs=epochs, test_loader=test_loader)
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
-    torch.save(model.state_dict(), save_path + '{}+classifier.torch'.format(model_name))
-    del drugs_encodings, controls_encodings, encodings, x_train, y_train
-
+    last_train_acc, last_val_acc = run_supervised_classifier_training(train_loader, model, optimizer, criterion, device,
+                                                                      epochs=epochs, test_loader=test_loader, save_to=save_path)
     return last_train_acc, last_val_acc
 
 
@@ -151,30 +155,7 @@ def train_linear_classifier_for_drug(drug, model, epochs,
 
 if __name__ == '__main__':
 
-    # results = {}
-    # for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'adversarial']:
-    #     results[model] = []
-    #     for cell_line in constants.cell_lines:
-    #         val_acc = train_linear_classifier_for_cell_line(cell_line, model, 100)
-    #         results[model].append(val_acc)
-    #     results[model] = sum(results[model]) / len(constants.cell_lines)
-    #
-    # print(results)
+    for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
+        for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
 
-    # results = {}
-    # for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'adversarial']:
-    #     results[model] = []
-    #     for drug in constants.drugs:
-    #         val_acc = train_linear_classifier_for_drug(drug, model, 200)
-    #         results[model].append(val_acc)
-    #     results[model] = sum(results[model]) / len(constants.cell_lines)
-    #
-    # print(results)
-
-    results = {}
-    for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'adversarial']:
-        acc, val_acc = train_classifier_with_pretrained_encoder(100, model, 1024)
-        results[model] = (round(acc,3), round(val_acc,3))
-
-    for key in results:
-        print('{}: {}'.format(key, results[key]))
+            acc, val_acc = train_classifier_with_pretrained_encoder(50, model, setting, batch_size=1024)

@@ -10,6 +10,7 @@ from hdbscan import HDBSCAN
 from statsmodels.stats.multitest import multipletests
 from scipy.stats import ks_2samp, mannwhitneyu, kruskal, fisher_exact
 from torch.nn import Sequential
+from tqdm import tqdm
 
 from src.models import Autoencoder, DeepClassifier
 from src.constants import cell_lines as all_cell_lines
@@ -311,7 +312,8 @@ def get_image_encodings_from_path(path, common_image_id, transform, n=None):
     }
 
     # get encodings
-    for file in filenames:
+    print('processing images from {}'.format(path))
+    for file in tqdm(filenames):
         img = read_image(path + file)
         img_encoded = transform(img)
         encodings.append(img_encoded.detach().cpu().numpy())
@@ -480,22 +482,22 @@ def plot_cell_line_clustering_with_random_cluster_composition(cell_line, min_clu
         pyplot.close()
 
 
-def get_f_transform(model, device):
+def get_f_transform(model, setting, device):
 
     if model == 'unsupervised':
-        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
+        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae\\{}\\'.format(setting)
         model = Autoencoder().to(device)
         # load a trained autoencoder to use it in the transform
-        model.load_state_dict(torch.load(path_to_ae_model + 'autoencoder.torch', map_location=device))
+        model.load_state_dict(torch.load(path_to_ae_model + 'best.torch', map_location=device))
         model.eval()
         # create a transform function with autoencoder
         transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
     elif model == 'self-supervised':
-        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\dcl+byol_at_17\\'
+        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\byol\\{}\\'.format(setting)
         model = DeepClassifier().to(device)
         # load a trained deep classifier to use it in the transform
-        model.load_state_dict(torch.load(path_to_cl_model + 'best_dcl+byol_at_16.torch', map_location=device))
+        model.load_state_dict(torch.load(path_to_cl_model + 'best.torch', map_location=device))
         model.eval()
         # truncate to the layer with learned representations
         model = Sequential(*list(model.model.children())[:-4])
@@ -503,21 +505,21 @@ def get_f_transform(model, device):
         transform = lambda x: model(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
     elif model == 'weakly-supervised':
-        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\dcl_at_100_0.7424\\'
+        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\cl\\{}\\'.format(setting)
         model = DeepClassifier().to(device)
         # load a trained deep classifier to use it in the transform
-        model.load_state_dict(torch.load(path_to_cl_model + 'deep_classifier.torch', map_location=device))
+        model.load_state_dict(torch.load(path_to_cl_model + 'best.torch', map_location=device))
         model.eval()
         # truncate to the layer with learned representations
         model = Sequential(*list(model.model.children())[:-4])
         # create a transform function with weakly supervised classifier
         transform = lambda x: model(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
-    elif model == 'adversarial':
-        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
+    elif model == 'regularized':
+        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl\\{}\\'.format(setting)
         model = Autoencoder().to(device)
         # load a trained autoencoder to use it in the transform
-        model.load_state_dict(torch.load(path_to_ae_model + 'ae.torch', map_location=device))
+        model.load_state_dict(torch.load(path_to_ae_model + 'best.torch', map_location=device))
         model.eval()
         # create a transform function with autoencoder
         transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)

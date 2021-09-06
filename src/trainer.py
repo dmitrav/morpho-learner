@@ -3,7 +3,7 @@ from matplotlib import pyplot
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
 from torchvision.io import read_image
-from torchmetrics import Accuracy
+from torchmetrics import Accuracy, AUROC, Precision
 import torch.nn.functional as F
 from torchvision import transforms as T
 
@@ -152,8 +152,11 @@ def run_weakly_supervised_classifier_training(loader_train, loader_val, model, o
 
 
 def run_supervised_classifier_training(loader_train, model, optimizer, criterion, device,
-                                       lr_scheduler=None, epochs=10, test_loader=None):
+                                       lr_scheduler=None, epochs=10, test_loader=None, save_to=""):
     f_acc = Accuracy().to(device)
+    f_auroc = AUROC(num_classes=2, pos_label=1).to(device)
+    f_prec = Precision().to(device)
+
     print("training started...")
     train_acc, val_acc = 0, -1
     for epoch in range(epochs):
@@ -161,6 +164,8 @@ def run_supervised_classifier_training(loader_train, model, optimizer, criterion
         start = time.time()
         loss = 0
         train_acc = 0
+        train_auroc = 0
+        train_prec = 0
         for batch_features, batch_labels in loader_train:
             # load it to the active device
             batch_features = batch_features.float().to(device)
@@ -172,6 +177,8 @@ def run_supervised_classifier_training(loader_train, model, optimizer, criterion
                 outputs = model(batch_features)
                 train_loss += criterion(outputs, batch_labels.to(device))
                 train_acc += float(f_acc(outputs, batch_labels.to(device)))
+                train_auroc += float(f_auroc(outputs, batch_labels.to(device)))
+                train_prec += float(f_prec(outputs, batch_labels.to(device)))
 
                 # compute accumulated gradients
                 train_loss.backward()
@@ -182,25 +189,39 @@ def run_supervised_classifier_training(loader_train, model, optimizer, criterion
 
         # compute epoch training loss
         loss = loss / len(loader_train)
-        # compute epoch training accuracy
+        # compute epoch metrics
         train_acc = train_acc / len(loader_train)
+        train_auroc = train_auroc / len(loader_train)
+        train_prec = train_prec / len(loader_train)
 
         if test_loader is not None:
             val_acc = 0
+            val_auroc = 0
+            val_prec = 0
             for batch_features, batch_labels in test_loader:
                 batch_features = batch_features.float().to(device)
                 outputs = model(batch_features)
                 val_acc += float(f_acc(outputs, batch_labels.to(device)))
+                val_auroc += float(f_auroc(outputs, batch_labels.to(device)))
+                val_prec += float(f_prec(outputs, batch_labels.to(device)))
             # compute epoch training accuracy
             val_acc = val_acc / len(test_loader)
+            val_auroc = val_auroc / len(test_loader)
+            val_prec = val_prec / len(test_loader)
 
         # update lr
         if lr_scheduler is not None:
             lr_scheduler.step()
 
+        torch.save(model.state_dict(), save_to + 'classifier_at_{}.torch'.format(epoch+1))
+
         # display the epoch training loss
-        print("epoch {}/{}: {} sec, loss = {:.4f}, train_acc = {:.4f}, val_acc = {:.4f}"
-              .format(epoch + 1, epochs, int(time.time() - start), loss, train_acc, val_acc))
+        print("epoch {}/{}: {} sec, loss = {:.4f},\n"
+              "train_acc = {:.4f}, val_acc = {:.4f},\n"
+              "train_auroc = {:.4f}, val_auroc = {:.4f},\n"
+              "train_prec = {:.4f}, val_prec = {:.4f}\n"
+              .format(epoch + 1, epochs, int(time.time() - start), loss,
+                      train_acc, val_acc, train_auroc, val_auroc, train_prec, val_prec))
 
     return train_acc, val_acc
 
