@@ -25,11 +25,10 @@ def train_classifier_with_pretrained_encoder(epochs, model_name, setting_name, b
     transform = get_f_transform(model_name, setting_name, device)
 
     # collect learned representations
-    n = 100000
-    drugs_train, _ = get_image_encodings_from_path(path_to_drugs_train, "", transform, n=n)
-    controls_train, _ = get_image_encodings_from_path(path_to_controls_train, "", transform, n=n)
-    drugs_test, _ = get_image_encodings_from_path(path_to_drugs_test, "", transform, n=n/10)
-    controls_test, _ = get_image_encodings_from_path(path_to_controls_test, "", transform, n=n/10)
+    drugs_train, _ = get_image_encodings_from_path(path_to_drugs_train, "", transform)
+    controls_train, _ = get_image_encodings_from_path(path_to_controls_train, "", transform)
+    drugs_test, _ = get_image_encodings_from_path(path_to_drugs_test, "", transform)
+    controls_test, _ = get_image_encodings_from_path(path_to_controls_test, "", transform)
 
     print("train set: {} drugs, {} controls".format(len(drugs_train), len(controls_train)))
     print("test set: {} drugs, {} controls".format(len(drugs_test), len(controls_test)))
@@ -47,25 +46,15 @@ def train_classifier_with_pretrained_encoder(epochs, model_name, setting_name, b
 
     model = Classifier().to(device)
 
-    lrs = [0.0005, 0.001, 0.005, 0.01]
-    ms = [0.6, 0.7, 0.8, 0.9]
-    ws = [1e-4, 1e-3, 1e-2, 0]
+    if not os.path.exists(save_path + '\\'):
+        os.makedirs(save_path + '\\')
 
-    for lr in lrs:
-        for m in ms:
-            for w in ws:
+    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.6, weight_decay=1e-3)
+    criterion = nn.CrossEntropyLoss()
 
-                params = 'lr={}, m={], w={}'.format(lr, m, w)
-                if not os.path.exists(save_path + params + '\\'):
-                    os.makedirs(save_path + params + '\\')
-
-                print(params)
-                optimizer = optim.SGD(model.parameters(), lr=lr, momentum=m, weight_decay=w)
-                criterion = nn.CrossEntropyLoss()
-
-                last_train_acc, last_val_acc = run_supervised_classifier_training(train_loader, model, optimizer, criterion, device,
-                                                                                  epochs=epochs, test_loader=test_loader,
-                                                                                  save_to=save_path + params + '\\')
+    last_train_acc, last_val_acc = run_supervised_classifier_training(train_loader, model, optimizer, criterion, device,
+                                                                      epochs=epochs, test_loader=test_loader,
+                                                                      save_to=save_path)
 
     return last_train_acc, last_val_acc
 
@@ -170,7 +159,5 @@ def train_linear_classifier_for_drug(drug, model, epochs,
 if __name__ == '__main__':
 
     for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
-        # for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
-        for setting in ['no_aug_multi_crop']:
-
-            acc, val_acc = train_classifier_with_pretrained_encoder(30, model, setting, batch_size=512)
+        for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
+            acc, val_acc = train_classifier_with_pretrained_encoder(50, model, setting, batch_size=512)
