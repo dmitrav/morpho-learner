@@ -46,17 +46,24 @@ def train_classifier_with_pretrained_encoder(epochs, model_name, setting_name, b
 
     model = Classifier().to(device)
 
-    if not os.path.exists(save_path + '\\'):
-        os.makedirs(save_path + '\\')
+    lrs = [0.1, 0.05, 0.01]
+    ms = [0.9, 0.8, 0.7]
+    wds = [1e-3, 1e-4, 1e-5]
 
-    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.6, weight_decay=1e-3)
-    criterion = nn.CrossEntropyLoss()
+    for lr in lrs:
+        for m in ms:
+            for wd in wds:
 
-    last_train_acc, last_val_acc = run_supervised_classifier_training(train_loader, model, optimizer, criterion, device,
-                                                                      epochs=epochs, test_loader=test_loader,
-                                                                      save_to=save_path)
+                params = 'lr={},m={},wd={}'.format(lr, m, wd)
+                if not os.path.exists(save_path + '\\' + params + '\\'):
+                    os.makedirs(save_path + '\\' + params + '\\')
 
-    return last_train_acc, last_val_acc
+                optimizer = optim.SGD(model.parameters(), lr=lr, momentum=m, weight_decay=wd)
+                criterion = nn.CrossEntropyLoss()
+
+                last_train_acc, last_val_acc = run_supervised_classifier_training(train_loader, model, optimizer, criterion, device,
+                                                                                  epochs=epochs, test_loader=test_loader,
+                                                                                  save_to=save_path + '\\' + params + '\\')
 
 
 def preprocess_data(encodings, ids, data_type='', split_percent=None):
@@ -160,4 +167,5 @@ if __name__ == '__main__':
 
     for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
         for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
-            acc, val_acc = train_classifier_with_pretrained_encoder(50, model, setting, batch_size=512)
+
+            train_classifier_with_pretrained_encoder(25, model, setting, batch_size=1024)

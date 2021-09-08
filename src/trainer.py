@@ -504,24 +504,24 @@ if __name__ == "__main__":
 
     print("\n\n===== NO_AUG_ONE_CROP =====\n\n")
     # make datasets with no augmentations and single crops
-    train_no_aug_one_crop = MultiCropDataset(path_to_train_data, [crop_size], [1], [1], [1], no_aug=True, size_dataset=train_size)
-    test_no_aug_one_crop = MultiCropDataset(path_to_test_data, [crop_size], [1], [1], [1], no_aug=True, size_dataset=test_size)
-    train_all_models(epochs, batch_size, train_no_aug_one_crop, test_no_aug_one_crop, dataset_id="no_aug_one_crop")
+    train_one_crop = MultiCropDataset(path_to_train_data, [crop_size], [1], [1], [1], no_aug=True, size_dataset=train_size)
+    test_one_crop = MultiCropDataset(path_to_test_data, [crop_size], [1], [1], [1], no_aug=True, size_dataset=test_size)
+    train_all_models(epochs, batch_size, train_one_crop, test_one_crop, dataset_id="no_aug_one_crop")
 
     print("\n\n===== AUG_ONE_CROP =====\n\n")
     # make datasets with SimCLR augmentations and single crops
-    train_aug_one_crop = MultiCropDataset(path_to_train_data, [crop_size], [1], [1], [1], no_aug=False, size_dataset=train_size)
-    test_aug_one_crop = MultiCropDataset(path_to_test_data, [crop_size], [1], [1], [1], no_aug=False, size_dataset=test_size)
-    train_all_models(epochs, batch_size, train_aug_one_crop, test_aug_one_crop, dataset_id='aug_one_crop')
+    train_one_crop.no_aug = False
+    test_one_crop.no_aug = False
+    train_all_models(epochs, batch_size, train_one_crop, test_one_crop, dataset_id='aug_one_crop')
 
     print("\n\n===== AUG_MULTI_CROP =====\n\n")
     # make datasets with SimCLR augmentations and multi-crops
-    train_aug_multi_crop = MultiCropDataset(path_to_train_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False, size_dataset=train_size)
-    test_aug_multi_crop = MultiCropDataset(path_to_test_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False, size_dataset=test_size)
-    train_all_models(epochs, batch_size, train_aug_multi_crop, test_aug_multi_crop, dataset_id='aug_multi_crop')
+    train_multi_crop = MultiCropDataset(path_to_train_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False, size_dataset=train_size)
+    test_multi_crop = MultiCropDataset(path_to_test_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=False, size_dataset=test_size)
+    train_all_models(epochs, batch_size, train_multi_crop, test_multi_crop, dataset_id='aug_multi_crop')
 
     print("\n\n===== NO_AUG_MULTI_CROP =====\n\n")
     # make datasets with no augmentations and multi-crops
-    train_no_aug_multi_crop = MultiCropDataset(path_to_train_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=True, size_dataset=train_size)
-    test_no_aug_multi_crop = MultiCropDataset(path_to_test_data, [crop_size, crop_size, crop_size], [1, 2, 2], [1, 0.5, 0.25], [1, 0.75, 0.5], no_aug=True, size_dataset=test_size)
-    train_all_models(epochs, batch_size, train_no_aug_multi_crop, test_no_aug_multi_crop, dataset_id='no_aug_multi_crop')
+    train_multi_crop.no_aug = True
+    test_multi_crop.no_aug = True
+    train_all_models(epochs, batch_size, train_multi_crop, test_multi_crop, dataset_id='no_aug_multi_crop')
