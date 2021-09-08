@@ -19,7 +19,7 @@ def train_classifier_with_pretrained_encoder(epochs, model_name, setting_name, b
     path_to_drugs_test = 'D:\ETH\projects\morpho-learner\data\\test\\drugs\\'
     path_to_controls_test = 'D:\ETH\projects\morpho-learner\data\\test\\controls\\'
 
-    save_path = 'D:\ETH\projects\morpho-learner\\res\\linear_evaluation\\{}\\{}\\'.format(model_name, setting_name)
+    save_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\linear_evaluation\\{}\\{}\\'.format(model_name, setting_name)
 
     device = torch.device('cuda')
     transform = get_f_transform(model_name, setting_name, device)

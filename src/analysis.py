@@ -294,13 +294,28 @@ def plot_drugs_clustering(min_cluster_size, path_to_drugs, save_path, transform)
             save_cluster_members(path_to_drugs, filenames, clusters_labels, drug, save_path)
 
 
-def get_image_encodings_from_path(path, common_image_id, transform, n=None):
+def get_image_encodings_from_path(path, common_image_ids, transform, n=None, randomize=True):
 
-    encodings = []
-
-    filenames = [f for f in os.listdir(path) if common_image_id in f]
-    if n is not None:
-        filenames = random.sample(filenames, n)
+    filenames = []
+    # get filenames to retrieve image ids
+    if isinstance(common_image_ids, str):
+        filenames = [f for f in os.listdir(path) if common_image_ids in f]
+        if n is not None:
+            if randomize:
+                filenames = random.sample(filenames, n)
+            else:
+                filenames = sorted(filenames)[-n:]
+    elif isinstance(common_image_ids, list):
+        for cid in common_image_ids:
+            cid_files = [f for f in os.listdir(path) if cid in f]
+            if n is not None:
+                if randomize:
+                    cid_files = random.sample(cid_files, n)
+                else:
+                    cid_files = sorted(cid_files)[-n:]
+            filenames.extend(cid_files)
+    else:
+        raise ValueError('Unknown common image ids: {}'.format(common_image_ids))
 
     image_ids = {
         'filenames': filenames,
@@ -311,6 +326,7 @@ def get_image_encodings_from_path(path, common_image_id, transform, n=None):
         'dates': ['_'.join(f.split('_')[-3:]) for f in filenames]
     }
 
+    encodings = []
     # get encodings
     print('processing images from {}'.format(path))
     for file in tqdm(filenames):
@@ -539,7 +555,7 @@ if __name__ == "__main__":
 
     analyze_unsupervised = False
     analyze_weakly_supervised = False
-    analyze_adversarial = False
+    analyze_regularized = False
     analyze_self_supervised = True
 
     min_cluster_size = 30
@@ -553,7 +569,7 @@ if __name__ == "__main__":
         plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_ae_model + 'new_drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
         # plot_full_data_umaps(path_to_drugs, path_to_ae_model + 'full_data_umaps\\', transform)
 
-    if analyze_adversarial:
+    if analyze_regularized:
         path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
         transform = get_f_transform('adversarial', device)
 
