@@ -109,7 +109,6 @@ def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_imag
                'consistency_cells': [], 'consistency_drugs': []}
 
     for factor in tqdm(grouping_factors):
-
         for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
             for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
 
@@ -149,7 +148,7 @@ def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_imag
                     results['consistency_drugs'].append(consisten_d)
 
     results = pandas.DataFrame(results)
-    results.to_csv(save_to + 'clusters_over_min_cluster_size_{}.csv'.format(uid), index=False)
+    results.to_csv(save_to + 'clustering_{}.csv'.format(uid), index=False)
 
 
 def plot_full_distribution_of_clusters(path, save_to):
@@ -355,7 +354,9 @@ def print_statistics_on_similarity_results(path):
                 ))
 
 
-def plot_facet_grid():
+def plot_facet_grid(path):
+
+    # TODO: I might wanna plot -log10 of similarity scores...
 
     attend = seaborn.load_dataset("attention").query("subject <= 16")
     g = seaborn.FacetGrid(attend, col="subject", col_wrap=4, height=2, ylim=(0, 10), margin_titles=True)
@@ -363,33 +364,97 @@ def plot_facet_grid():
     pyplot.show()
 
 
+def calculate_classification_metrics(cell_line, codes_drugs, codes_controls, drugs_ids, controls_ids, classifier):
+
+    # get codes
+    codes_drugs = [codes_drugs[i] for i in range(len(codes_drugs)) if drugs_ids['cell_line'][i] == cell_line]
+    codes_controls = [codes_controls[i] for i in range(len(codes_controls)) if controls_ids['cell_line'][i] == cell_line]
+    # assign true labels
+    labels_drugs = [1 for x in codes_drugs]
+    labels_controls = [0 for x in codes_controls]
+
+    # get predictions
+    preds_drugs = []
+    preds_controls = []
+    for code in codes_drugs:
+        preds_drugs.append(classifier(code))
+    for code in codes_controls:
+        preds_controls.append(classifier(code))
+
+    # calculate metrics
+    acc = metrics.accuracy_score([*labels_drugs, *labels_controls], [*preds_drugs, *preds_controls])
+    f1 = metrics.f1_score([*labels_drugs, *labels_controls], [*preds_drugs, *preds_controls])
+    rec = metrics.recall_score([*labels_drugs, *labels_controls], [*preds_drugs, *preds_controls])
+    prec = metrics.precision_score([*labels_drugs, *labels_controls], [*preds_drugs, *preds_controls])
+    roc_auc = metrics.roc_auc_score([*labels_drugs, *labels_controls], [*preds_drugs, *preds_controls])
+
+    return acc, f1, rec, prec, roc_auc
+
+
+def collect_and_save_classification_results_for_cell_lines(path_to_drugs, path_to_controls, picked_lines):
+
+    save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\classification\\'
+    if not os.path.exists(save_to):
+        os.makedirs(save_to)
+
+    results = {'cell_line': [], 'method': [], 'setting': [],
+               'accuracy': [], 'f1': [], 'recall': [], 'precision': [], 'roc_auc': []}
+
+    for method in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
+        for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
+
+                transform = analysis.get_f_transform(method, setting, torch.device('cuda'))
+                encodings_drugs, drugs_ids = analysis.get_image_encodings_from_path(path_to_drugs, "", transform)
+                encodings_controls, controls_ids = analysis.get_image_encodings_from_path(path_to_controls, "", transform)
+
+                classifier = analysis.get_f_classification(method, setting, torch.device('cuda'))
+                for cell_line in picked_lines:
+
+                    results['cell_line'].append(cell_line)
+                    results['method'].append(method)
+                    results['setting'].append(setting)
+
+                    acc, f1, rec, prec, roc_auc = calculate_classification_metrics(cell_line, encodings_drugs, encodings_controls, drugs_ids, controls_ids, classifier)
+                    results['accuracy'].append(acc)
+                    results['f1'].append(f1)
+                    results['recall'].append(rec)
+                    results['precision'].append(prec)
+                    results['roc_auc'].append(roc_auc)
+
+    results = pandas.DataFrame(results)
+    results.to_csv(save_to + 'classification_for_cell_lines.csv', index=False)
+
+
 if __name__ == "__main__":
 
-    # SIMILARITY OF KNOWN DRUGS VS CONTROLS
     path_to_test_drugs = 'D:\ETH\projects\morpho-learner\\data\\test\\drugs\\'
     path_to_test_controls = 'D:\ETH\projects\morpho-learner\\data\\test\\controls\\'
+
+    # SIMILARITY OF KNOWN DRUGS VS CONTROLS
     compare_similarity(path_to_test_drugs, path_to_test_controls)
 
     similarity_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\similarity\\similarity.csv'
     print('STATISTICS ON SIMILARITY OF KNOWN DRUGS:\n\n')
     print_statistics_on_similarity_results(similarity_results_path)
-    plot_facet_grid()  # TODO: plot three barplots: MTX-PTX, MTX-DMSO, PTX-DMSO
+    plot_facet_grid(similarity_results_path)  # TODO: plot three barplots: MTX-PTX, MTX-DMSO, PTX-DMSO
 
     # CLUSTERING OF TEST SET
-    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, [""], (30, 310, 30), uid='in_test')
+    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, [""], (30, 310, 30), uid='on_test')
 
-    test_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_in_test.csv'
+    test_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_on_test.csv'
     best_clustering = select_the_best_clustering_results(test_clustering_results_path, [""])
     print('BEST CLUSTERING OF TEST DATA:\n\n', best_clustering.to_string())
 
     # CLUSTERING OF PICKED CELL LINES
-    path_to_train_drugs = 'D:\ETH\projects\morpho-learner\\data\\train\\drugs\\'
-    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_train_drugs, ["COLO205", "SW620", "SKMEL2"], (30, 310, 30), uid='by_cell_lines')
+    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, ["COLO205", "SW620", "SKMEL2"], (30, 310, 30), uid='by_cell_lines')
 
-    train_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_by_cell_lines.csv'
+    cell_lines_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_by_cell_lines.csv'
     print('STATISTICS ON CLUSTERING OF PICKED CELL LINES:\n\n')
-    print_statistics_on_clustering_results(train_clustering_results_path)
-    plot_facet_grid()  # TODO: plot three boxplots: n clusters for COLO205, SW620, SKMEL2
+    print_statistics_on_clustering_results(cell_lines_clustering_results_path)
+    plot_facet_grid(cell_lines_clustering_results_path)  # TODO: plot three boxplots: n clusters for COLO205, SW620, SKMEL2
 
-    # CLASSIFICATION OF DRUGS VS CONTROLS
-    pass
+    # CLASSIFICATION OF DRUGS VS CONTROLS FOR PICKED CELL LINES
+    collect_and_save_classification_results_for_cell_lines(path_to_test_drugs, path_to_test_controls, ["HT29", "HCT15", "ACHN"])
+    test_classification_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\classification\\classification_for_cell_lines.csv'
+    plot_facet_grid(test_classification_results_path)  # TODO: plot three barplots: accuracy for HT29, HCT15, ACHN
+

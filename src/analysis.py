@@ -12,7 +12,7 @@ from scipy.stats import ks_2samp, mannwhitneyu, kruskal, fisher_exact
 from torch.nn import Sequential
 from tqdm import tqdm
 
-from src.models import Autoencoder, DeepClassifier
+from src.models import Autoencoder, DeepClassifier, Classifier
 from src.constants import cell_lines as all_cell_lines
 from src.constants import drugs as all_drugs
 from src.constants import get_type_by_name
@@ -498,7 +498,21 @@ def plot_cell_line_clustering_with_random_cluster_composition(cell_line, min_clu
         pyplot.close()
 
 
+def get_f_classification(model, setting, device):
+
+    path_to_model = 'D:\ETH\projects\morpho-learner\\res\\linear_evaluation\\{}\\{}\\'.format(model, setting)
+    model = Classifier().to(device)
+    # load a trained classifier to use it in the transform
+    model.load_state_dict(torch.load(path_to_model + 'best.torch', map_location=device))
+    model.eval()
+    # create a transform function with autoencoder
+    transform = lambda x: model(torch.Tensor(numpy.expand_dims(x, axis=0))).to(device).reshape(-1)
+
+    return transform
+
+
 def get_f_transform(model, setting, device):
+    """ Get the function to retrieve learned representations from the image. """
 
     if model == 'unsupervised':
         path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\training\\ae\\{}\\'.format(setting)
