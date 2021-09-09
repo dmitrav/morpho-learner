@@ -71,13 +71,42 @@ def plot_number_of_clusters(key, mcs, save_to, filter_threshold=4):
     pyplot.savefig(save_to + plot_title.replace(' ', '_') + '_mcs={}.pdf'.format(mcs))
 
 
+def calculate_clustering_consistency(clusters, image_ids):
+    """ This method computes consistencies of clusters,
+        based on how many images of the same cell line / drug belong to the same cluster.
+        That's an arbitrary experimental metric. """
+
+    consisten_cs = []  # cell lines
+    consisten_ds = []  # drugs
+    n_clusters = max(clusters)+1
+    for i in range(n_clusters):
+        cluster_indices = numpy.where(numpy.array(clusters) == i)[0]
+        cluster_cells = numpy.array(image_ids['cell_lines'])[cluster_indices]
+        cluster_drugs = numpy.array(image_ids['drugs'])[cluster_indices]
+
+        cons_c = 0
+        # calculate consistency of each cell line and then append mean
+        for cell_line in cell_lines:
+            cons_c += numpy.where(cluster_cells == cell_line)[0].shape[0] / cluster_indices.shape[0]
+        consisten_cs.append(cons_c / len(cell_lines))
+
+        cons_d = 0
+        # calculate consistency of each drug and then append mean
+        for drug in drugs:
+            cons_d += numpy.where(cluster_drugs == drug)[0].shape[0] / cluster_indices.shape[0]
+        consisten_ds.append(cons_d / len(drugs))
+
+    return numpy.median(consisten_cs), numpy.median(consisten_ds)
+
+
 def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_images, grouping_factors, range_with_step, uid=''):
     """ Cluster the dataset over multiple parameters, evaluate results and save results as a dataframe. """
 
     save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\'
 
     results = {'group_by': [], 'method': [], 'min_cluster_size': [], 'n_clusters': [],
-               'noise': [], 'silhouette': [], 'calinski_harabasz': [], 'davies_bouldin': []}
+               'noise': [], 'silhouette': [], 'calinski_harabasz': [], 'davies_bouldin': [],
+               'consistency_cells': [], 'consistency_drugs': []}
 
     for factor in tqdm(grouping_factors):
 
@@ -104,6 +133,7 @@ def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_imag
                     silhouette = metrics.silhouette_score(embedding, clusters)
                     calinski_harabasz = metrics.calinski_harabasz_score(embedding, clusters)
                     davies_bouldin = metrics.davies_bouldin_score(embedding, clusters)
+                    consisten_c, consisten_d = calculate_clustering_consistency(clusters, image_ids)
 
                     results['group_by'].append(factor)
                     results['method'].append(model)
@@ -115,6 +145,8 @@ def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_imag
                     results['silhouette'].append(silhouette)
                     results['calinski_harabasz'].append(calinski_harabasz)
                     results['davies_bouldin'].append(davies_bouldin)
+                    results['consistency_cells'].append(consisten_c)
+                    results['consistency_drugs'].append(consisten_d)
 
     results = pandas.DataFrame(results)
     results.to_csv(save_to + 'clusters_over_min_cluster_size_{}.csv'.format(uid), index=False)
@@ -344,7 +376,6 @@ if __name__ == "__main__":
     plot_facet_grid()  # TODO: plot three barplots: MTX-PTX, MTX-DMSO, PTX-DMSO
 
     # CLUSTERING OF TEST SET
-    # TODO: add cluster consistency measure
     collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, [""], (30, 310, 30), uid='in_test')
 
     test_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_in_test.csv'
