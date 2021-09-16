@@ -84,17 +84,17 @@ def calculate_clustering_consistency(clusters, image_ids):
         cluster_cells = numpy.array(image_ids['cell_lines'])[cluster_indices]
         cluster_drugs = numpy.array(image_ids['drugs'])[cluster_indices]
 
-        cons_c = 0
+        i_cons_c = []
         # calculate consistency of each cell line and then append mean
-        for cell_line in cell_lines:
-            cons_c += numpy.where(cluster_cells == cell_line)[0].shape[0] / cluster_indices.shape[0]
-        consisten_cs.append(cons_c / len(cell_lines))
+        for cell_line in numpy.unique(cluster_cells):
+            i_cons_c.append(numpy.where(cluster_cells == cell_line)[0].shape[0] / cluster_indices.shape[0])
+        consisten_cs.append(numpy.mean(i_cons_c) * 100)
 
-        cons_d = 0
+        i_cons_d = []
         # calculate consistency of each drug and then append mean
-        for drug in drugs:
-            cons_d += numpy.where(cluster_drugs == drug)[0].shape[0] / cluster_indices.shape[0]
-        consisten_ds.append(cons_d / len(drugs))
+        for drug in numpy.unique(cluster_drugs):
+            i_cons_d.append(numpy.where(cluster_drugs == drug)[0].shape[0] / cluster_indices.shape[0])
+        consisten_ds.append(numpy.mean(i_cons_d) * 100)
 
     return numpy.median(consisten_cs), numpy.median(consisten_ds)
 
@@ -102,17 +102,22 @@ def calculate_clustering_consistency(clusters, image_ids):
 def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_images, grouping_factors, range_with_step, uid=''):
     """ Cluster the dataset over multiple parameters, evaluate results and save results as a dataframe. """
 
-    save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\'
+    # save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\'
+    save_to = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/clustering/'
+    if not os.path.exists(save_to):
+        os.makedirs(save_to)
 
-    results = {'group_by': [], 'method': [], 'min_cluster_size': [], 'n_clusters': [],
-               'noise': [], 'silhouette': [], 'calinski_harabasz': [], 'davies_bouldin': [],
+    results = {'group_by': [], 'method': [], 'setting': [], 'min_cluster_size': [],
+               'n_clusters': [], 'noise': [], 'silhouette': [], 'calinski_harabasz': [], 'davies_bouldin': [],
                'consistency_cells': [], 'consistency_drugs': []}
 
-    for factor in tqdm(grouping_factors):
-        for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
-            for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
+    for model in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
+        for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
 
-                transform = analysis.get_f_transform(model, setting, torch.device('cuda'))
+            # transform = analysis.get_f_transform(model, setting, torch.device('cuda'))
+            transform = analysis.get_f_transform(model, setting, torch.device('cpu'))
+
+            for factor in tqdm(grouping_factors):
                 encodings, image_ids = analysis.get_image_encodings_from_path(path_to_images, factor, transform)
                 encodings = numpy.array(encodings)
 
@@ -129,9 +134,15 @@ def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_imag
 
                     n_clusters = numpy.max(clusters) + 1
                     noise = int(numpy.sum(clusters == -1) / len(clusters) * 100)
-                    silhouette = metrics.silhouette_score(embedding, clusters)
-                    calinski_harabasz = metrics.calinski_harabasz_score(embedding, clusters)
-                    davies_bouldin = metrics.davies_bouldin_score(embedding, clusters)
+
+                    try:
+                        silhouette = metrics.silhouette_score(embedding, clusters)
+                        calinski_harabasz = metrics.calinski_harabasz_score(embedding, clusters)
+                        davies_bouldin = metrics.davies_bouldin_score(embedding, clusters)
+                    except ValueError:
+                        # single cluster
+                        silhouette, calinski_harabasz, davies_bouldin = -1, -1, -1
+
                     consisten_c, consisten_d = calculate_clustering_consistency(clusters, image_ids)
 
                     results['group_by'].append(factor)
@@ -162,14 +173,14 @@ def plot_full_distribution_of_clusters(path, save_to):
     pyplot.close()
 
 
-def select_the_best_clustering_results(path, grouping_factors):
+def select_the_best_clustering_results(path, grouping_factors, first_metric='silhouette'):
 
-    clustering_results = pandas.read_csv(path)
+    clustering_results = pandas.read_csv(path, keep_default_na=False)
 
     # find uncorrelated metrics for further evaluations
-    print("corr(silhouette, calinski_harabasz) = {}\ncorr(silhouette, davies_bouldin) = {}".format(
-        scipy.stats.pearsonr(clustering_results.loc[:, 'silhouette'], clustering_results.loc[:, 'calinski_harabasz'])[0],
-        scipy.stats.pearsonr(clustering_results.loc[:, 'silhouette'], clustering_results.loc[:, 'davies_bouldin'])[0]))
+    print("corr(silhouette, calinski_harabasz) = {}\ncorr(silhouette, davies_bouldin) = {}\n".format(
+        round(scipy.stats.pearsonr(clustering_results.loc[:, 'silhouette'], clustering_results.loc[:, 'calinski_harabasz'])[0], 3),
+        round(scipy.stats.pearsonr(clustering_results.loc[:, 'silhouette'], clustering_results.loc[:, 'davies_bouldin'])[0]), 3))
 
     best_clustering = pandas.DataFrame(columns=clustering_results.columns)
     for method in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
@@ -177,7 +188,7 @@ def select_the_best_clustering_results(path, grouping_factors):
             for factor in grouping_factors:
                 df = clustering_results.loc[(clustering_results['group_by'] == factor) & (clustering_results['method'] == method) & (clustering_results['setting'] == setting), :]
                 # select the best results by three metrics:
-                df = df[df['silhouette'] >= df['silhouette'].median()]
+                df = df[df[first_metric] >= df[first_metric].median()]
                 df = df[df['davies_bouldin'] <= df['davies_bouldin'].median()]
                 df = df[df['noise'] == df['noise'].min()]
                 if df.shape[0] > 1:
@@ -188,20 +199,31 @@ def select_the_best_clustering_results(path, grouping_factors):
     return best_clustering
 
 
-def print_statistics_on_clustering_results(path):
+def print_statistics_on_clustering_results(clustering_results, title=""):
 
-    # read results of clustering
-    clustering_results = pandas.read_csv(path)
+    print(title)
 
     for method in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
         for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
-            print(
-                "{} + {}:\nmedian n_clusters = {}\nmedian noise = {}%\nmedian silhouette = {}\nmedian davies_bouldin = {}\n".format(
-                    method, setting,
-                    int(clustering_results.loc[(clustering_results['method'] == method) & (clustering_results['setting'] == setting), "n_clusters"].median()),
-                    int(clustering_results.loc[(clustering_results['method'] == method) & (clustering_results['setting'] == setting), "noise"].median()),
-                    round(clustering_results.loc[(clustering_results['method'] == method) & (clustering_results['setting'] == setting), "silhouette"].median(), 3),
-                    round(clustering_results.loc[(clustering_results['method'] == method) & (clustering_results['setting'] == setting), "davies_bouldin"].median(), 3)
+
+            print("=== {} + {} ===\n".format(method, setting))
+
+            temp = clustering_results.loc[(clustering_results['method'] == method) & (clustering_results['setting'] == setting), :]
+
+            print("\nmedian n_clusters = {}"
+                  "\nmedian noise = {}%"
+                  "\nmedian silhouette = {}"
+                  "\nmedian calinski_harabasz = {}"
+                  "\nmedian davies_bouldin = {}"
+                  "\nmedian consistency_drugs = {}"
+                  "\nmedian consistency_cells = {}".format(
+                    int(temp["n_clusters"].median()),
+                    int(temp["noise"].median()),
+                    round(temp["silhouette"].median(), 3),
+                    round(temp["calinski_harabasz"].median(), 3),
+                    round(temp["davies_bouldin"].median(), 3),
+                    round(temp["consistency_drugs"].median(), 3),
+                    round(temp["consistency_cells"].median(), 3)
                 ))
 
 
@@ -283,11 +305,12 @@ def calculate_similarity_of_pair(codes_A, codes_B):
 
 def compare_similarity(path_to_drugs, path_to_controls):
 
-    save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\similarity\\'
+    # save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\similarity\\'
+    save_to = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/similarity/'
     if not os.path.exists(save_to):
         os.makedirs(save_to)
 
-    results = {'cell_line': [], 'method': [], 'setting': [], 'comparison': [],
+    results = {'group_by': [], 'method': [], 'setting': [], 'comparison': [],
                'euclidean': [], 'cosine': [], 'correlation': [], 'braycurtis': []}
 
     control_plates = ['P21_DMSO', 'N19_DMSO', 'M8_DMSO', 'L14_DMSO', 'H9_DMSO', 'E2_DMSO']
@@ -296,14 +319,19 @@ def compare_similarity(path_to_drugs, path_to_controls):
         for method in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
             for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
 
-                transform = analysis.get_f_transform(method, setting, torch.device('cuda'))
+                # transform = analysis.get_f_transform(method, setting, torch.device('cuda'))
+                transform = analysis.get_f_transform(method, setting, torch.device('cpu'))
 
-                encodings_MTX, _ = analysis.get_image_encodings_from_path(path_to_drugs, 'Methotrexate', transform)
-                encodings_PTX, _ = analysis.get_image_encodings_from_path(path_to_drugs, 'Pemetrexed', transform)
-                encodings_DMSO, _ = analysis.get_image_encodings_from_path(path_to_controls, control_plates, transform, n=10, randomize=False)
+                encodings_MTX, _ = analysis.get_image_encodings_from_path(path_to_drugs, ['Methotrexate', cell_line], transform)
+                encodings_PTX, _ = analysis.get_image_encodings_from_path(path_to_drugs, ['Pemetrexed', cell_line], transform)
+
+                encodings_DMSO = []
+                for plate in control_plates:
+                    encodings, _ = analysis.get_image_encodings_from_path(path_to_controls, [plate, cell_line], transform, n=10, randomize=False)
+                    encodings_DMSO.extend(encodings)
 
                 # compare Methotrexate with Pemetrexed
-                results['cell_line'].append(cell_line)
+                results['group_by'].append(cell_line)
                 results['method'].append(method)
                 results['setting'].append(setting)
                 results['comparison'].append('MTX-PTX')
@@ -314,7 +342,7 @@ def compare_similarity(path_to_drugs, path_to_controls):
                 results['braycurtis'].append(comparison['braycurtis'])
 
                 # compare Methotrexate with DMSO (control)
-                results['cell_line'].append(cell_line)
+                results['group_by'].append(cell_line)
                 results['method'].append(method)
                 results['setting'].append(setting)
                 results['comparison'].append('MTX-DMSO')
@@ -325,7 +353,7 @@ def compare_similarity(path_to_drugs, path_to_controls):
                 results['braycurtis'].append(comparison['braycurtis'])
 
                 # compare Pemetrexed with DMSO (control)
-                results['cell_line'].append(cell_line)
+                results['group_by'].append(cell_line)
                 results['method'].append(method)
                 results['setting'].append(setting)
                 results['comparison'].append('PTX-DMSO')
@@ -339,36 +367,62 @@ def compare_similarity(path_to_drugs, path_to_controls):
     results.to_csv(save_to + 'similarity.csv', index=False)
 
 
-def print_statistics_on_similarity_results(path):
+def print_statistics_on_similarity_results(results, title=""):
 
-    results = pandas.read_csv(path)
+    print(title)
 
     for method in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
         for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
 
             temp = results.loc[(results['method'] == method) & (results['setting'] == setting), :]
-            print("{} + {}:\nmedian euclidean = {}\nmedian cosine = {}\nmedian correlation = {}\nmedian braycurtis = {}\n".format(
-                    method, setting,
-                    round(temp["euclidean"].median(), 3), round(temp["cosine"].median(), 3),
-                    round(temp["correlation"].median(), 3), round(temp["braycurtis"].median(), 3)
+
+            mtx_ptx = temp.loc[temp['comparison'] == 'MTX-PTX', :]
+            mtx_dmso = temp.loc[temp['comparison'] == 'MTX-DMSO', :]
+            ptx_dmso = temp.loc[temp['comparison'] == 'PTX-DMSO', :]
+
+            print("=== {} + {} ===\n".format(method, setting))
+
+            print("MTX-PTX:\nmedian euclidean = {}\nmedian cosine = {}\nmedian correlation = {}\nmedian braycurtis = {}\n".format(
+                    round(mtx_ptx["euclidean"].median(), 3), round(mtx_ptx["cosine"].median(), 3),
+                    round(mtx_ptx["correlation"].median(), 3), round(mtx_ptx["braycurtis"].median(), 3)
+                ))
+
+            print("MTX-DMSO:\nmedian euclidean = {}\nmedian cosine = {}\nmedian correlation = {}\nmedian braycurtis = {}\n".format(
+                    round(mtx_dmso["euclidean"].median(), 3), round(mtx_dmso["cosine"].median(), 3),
+                    round(mtx_dmso["correlation"].median(), 3), round(mtx_dmso["braycurtis"].median(), 3)
+                ))
+
+            print("PTX-DMSO:\nmedian euclidean = {}\nmedian cosine = {}\nmedian correlation = {}\nmedian braycurtis = {}\n".format(
+                    round(ptx_dmso["euclidean"].median(), 3), round(ptx_dmso["cosine"].median(), 3),
+                    round(ptx_dmso["correlation"].median(), 3), round(ptx_dmso["braycurtis"].median(), 3)
                 ))
 
 
-def plot_facet_grid(path):
+def plot_facet_grid(data, x_variable, y_variable, hue, ci=None, plot_title=""):
 
-    # TODO: I might wanna plot -log10 of similarity scores...
+    data['method+setting'] = data['method'] + '\n' + data['setting']
 
-    attend = seaborn.load_dataset("attention").query("subject <= 16")
-    g = seaborn.FacetGrid(attend, col="subject", col_wrap=4, height=2, ylim=(0, 10), margin_titles=True)
-    g.map(seaborn.barplot, "solutions", "score", color=".3", ci=None)
-    pyplot.show()
+    # save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\'
+    save_to = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/'
+
+    seaborn.set(font_scale=0.5)
+    g = seaborn.FacetGrid(data, col="method+setting", hue=hue, col_wrap=4, height=1, margin_titles=True)
+    g.map(seaborn.barplot, x_variable, y_variable, order=list(data[hue].unique()), ci=ci)
+    g.set_titles("{col_name}")
+    for ax in g.axes.flat:
+        for label in ax.get_xticklabels():
+            label.set_rotation(45)
+
+    pyplot.tight_layout()
+    # pyplot.show()
+    pyplot.savefig(save_to + '{}.pdf'.format(plot_title))
 
 
 def calculate_classification_metrics(cell_line, codes_drugs, codes_controls, drugs_ids, controls_ids, classifier):
 
     # get codes
-    codes_drugs = [codes_drugs[i] for i in range(len(codes_drugs)) if drugs_ids['cell_line'][i] == cell_line]
-    codes_controls = [codes_controls[i] for i in range(len(codes_controls)) if controls_ids['cell_line'][i] == cell_line]
+    codes_drugs = [codes_drugs[i] for i in range(len(codes_drugs)) if drugs_ids['cell_lines'][i] == cell_line]
+    codes_controls = [codes_controls[i] for i in range(len(codes_controls)) if controls_ids['cell_lines'][i] == cell_line]
     # assign true labels
     labels_drugs = [1 for x in codes_drugs]
     labels_controls = [0 for x in codes_controls]
@@ -377,9 +431,9 @@ def calculate_classification_metrics(cell_line, codes_drugs, codes_controls, dru
     preds_drugs = []
     preds_controls = []
     for code in codes_drugs:
-        preds_drugs.append(classifier(code))
+        preds_drugs.append(int(classifier(code).argmax(-1)))
     for code in codes_controls:
-        preds_controls.append(classifier(code))
+        preds_controls.append(int(classifier(code).argmax(-1)))
 
     # calculate metrics
     acc = metrics.accuracy_score([*labels_drugs, *labels_controls], [*preds_drugs, *preds_controls])
@@ -393,24 +447,27 @@ def calculate_classification_metrics(cell_line, codes_drugs, codes_controls, dru
 
 def collect_and_save_classification_results_for_cell_lines(path_to_drugs, path_to_controls, picked_lines):
 
-    save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\classification\\'
+    # save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\classification\\'
+    save_to = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/classification/'
     if not os.path.exists(save_to):
         os.makedirs(save_to)
 
-    results = {'cell_line': [], 'method': [], 'setting': [],
+    results = {'group_by': [], 'method': [], 'setting': [],
                'accuracy': [], 'f1': [], 'recall': [], 'precision': [], 'roc_auc': []}
 
     for method in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
         for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
 
-                transform = analysis.get_f_transform(method, setting, torch.device('cuda'))
+                # transform = analysis.get_f_transform(method, setting, torch.device('cuda'))
+                transform = analysis.get_f_transform(method, setting, torch.device('cpu'))
                 encodings_drugs, drugs_ids = analysis.get_image_encodings_from_path(path_to_drugs, "", transform)
                 encodings_controls, controls_ids = analysis.get_image_encodings_from_path(path_to_controls, "", transform)
 
-                classifier = analysis.get_f_classification(method, setting, torch.device('cuda'))
+                # classifier = analysis.get_f_classification(method, setting, torch.device('cuda'))
+                classifier = analysis.get_f_classification(method, setting, torch.device('cpu'))
                 for cell_line in picked_lines:
 
-                    results['cell_line'].append(cell_line)
+                    results['group_by'].append(cell_line)
                     results['method'].append(method)
                     results['setting'].append(setting)
 
@@ -434,27 +491,48 @@ if __name__ == "__main__":
     compare_similarity(path_to_test_drugs, path_to_test_controls)
 
     similarity_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\similarity\\similarity.csv'
-    print('STATISTICS ON SIMILARITY OF KNOWN DRUGS:\n\n')
-    print_statistics_on_similarity_results(similarity_results_path)
-    plot_facet_grid(similarity_results_path)  # TODO: plot three barplots: MTX-PTX, MTX-DMSO, PTX-DMSO
+    sim_data = pandas.read_csv(similarity_results_path)
+    print_statistics_on_similarity_results(sim_data, title='STATISTICS ON SIMILARITY OF KNOWN DRUGS:')
+    plot_facet_grid(sim_data, 'comparison', 'euclidean', 'comparison', ci=80, plot_title='similarity_of_drugs')
 
-    # CLUSTERING OF TEST SET
-    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, [""], (30, 310, 30), uid='on_test')
-
-    test_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_on_test.csv'
-    best_clustering = select_the_best_clustering_results(test_clustering_results_path, [""])
-    print('BEST CLUSTERING OF TEST DATA:\n\n', best_clustering.to_string())
-
-    # CLUSTERING OF PICKED CELL LINES
-    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, ["COLO205", "SW620", "SKMEL2"], (30, 310, 30), uid='by_cell_lines')
-
+    # CLUSTERING OF CELL LINES
+    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, cell_lines, (10, 160, 10), uid='by_cell_lines')
     cell_lines_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_by_cell_lines.csv'
-    print('STATISTICS ON CLUSTERING OF PICKED CELL LINES:\n\n')
-    print_statistics_on_clustering_results(cell_lines_clustering_results_path)
-    plot_facet_grid(cell_lines_clustering_results_path)  # TODO: plot three boxplots: n clusters for COLO205, SW620, SKMEL2
+
+    cl_clust_data = pandas.read_csv(cell_lines_clustering_results_path)
+    print_statistics_on_clustering_results(cl_clust_data, title='STATISTICS ON CLUSTERING OF CELL LINES:')
+    # now subset to COLO205, SW620, SKMEL2
+    cl_clust_data = cl_clust_data.loc[(cl_clust_data['group_by'] == 'COLO205') | (cl_clust_data['group_by'] == 'SW620') | (cl_clust_data['group_by'] == 'SKMEL2'), :]
+    plot_facet_grid(cl_clust_data, 'group_by', 'n_clusters', 'group_by', ci=80, plot_title="clustering_picked_cell_lines")
+    plot_facet_grid(cl_clust_data, 'group_by', 'silhouette', 'group_by', ci=80, plot_title="silhouette_picked_cell_lines")
+    plot_facet_grid(cl_clust_data, 'group_by', 'calinski_harabasz', 'group_by', ci=80, plot_title="calinski_picked_cell_lines")
+    plot_facet_grid(cl_clust_data, 'group_by', 'davies_bouldin', 'group_by', ci=80, plot_title="davies_picked_cell_lines")
+    plot_facet_grid(cl_clust_data, 'group_by', 'consistency_drugs', 'group_by', ci=80, plot_title="consistency_picked_cell_lines")
+    plot_facet_grid(cl_clust_data, 'group_by', 'noise', 'group_by', ci=80, plot_title="noise_picked_cell_lines")
+
+    # CLUSTERING OF DRUGS
+    picked_drugs = [d for d in drugs if d not in ['PBS', 'DMSO']]
+    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, picked_drugs, (10, 160, 10), uid='by_drugs')
+    drugs_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_by_drugs.csv'
+
+    d_clust_data = pandas.read_csv(drugs_clustering_results_path)  # now subset to Gemcitabine, Cladribine, Irinotecan
+    print_statistics_on_clustering_results(d_clust_data, title='STATISTICS ON CLUSTERING OF DRUGS:')
+    # now subset to Gemcitabine, Cladribine, Irinotecan
+    d_clust_data = d_clust_data.loc[(d_clust_data['group_by'] == 'Gemcitabine') | (d_clust_data['group_by'] == 'Cladribine') | (d_clust_data['group_by'] == 'Irinotecan'), :]
+    plot_facet_grid(d_clust_data, 'group_by', 'n_clusters', 'group_by', ci=80, plot_title="clustering_picked_drugs")
+    plot_facet_grid(d_clust_data, 'group_by', 'silhouette', 'group_by', ci=80, plot_title="silhouette_picked_drugs")
+    plot_facet_grid(d_clust_data, 'group_by', 'calinski_harabasz', 'group_by', ci=80, plot_title="calinski_picked_drugs")
+    plot_facet_grid(d_clust_data, 'group_by', 'davies_bouldin', 'group_by', ci=80, plot_title="davies_picked_drugs")
+    plot_facet_grid(d_clust_data, 'group_by', 'consistency_cells', 'group_by', ci=80, plot_title="consistency_picked_drugs")
+    plot_facet_grid(d_clust_data, 'group_by', 'noise', 'group_by', ci=80, plot_title="noise_picked_drugs")
 
     # CLASSIFICATION OF DRUGS VS CONTROLS FOR PICKED CELL LINES
     collect_and_save_classification_results_for_cell_lines(path_to_test_drugs, path_to_test_controls, ["HT29", "HCT15", "ACHN"])
     test_classification_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\classification\\classification_for_cell_lines.csv'
-    plot_facet_grid(test_classification_results_path)  # TODO: plot three barplots: accuracy for HT29, HCT15, ACHN
+    class_data = pandas.read_csv(test_classification_results_path)
+    plot_facet_grid(class_data, 'group_by', 'roc_auc', 'group_by', ci=80)
+    plot_facet_grid(class_data, 'group_by', 'f1', 'group_by', ci=80)
+    plot_facet_grid(class_data, 'group_by', 'accuracy', 'group_by', ci=80)
+    plot_facet_grid(class_data, 'group_by', 'precision', 'group_by', ci=80)
+    plot_facet_grid(class_data, 'group_by', 'recall', 'group_by', ci=80)
 

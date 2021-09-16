@@ -296,26 +296,21 @@ def plot_drugs_clustering(min_cluster_size, path_to_drugs, save_path, transform)
 
 def get_image_encodings_from_path(path, common_image_ids, transform, n=None, randomize=True):
 
-    filenames = []
     # get filenames to retrieve image ids
     if isinstance(common_image_ids, str):
         filenames = [f for f in os.listdir(path) if common_image_ids in f]
-        if n is not None:
-            if randomize:
-                filenames = random.sample(filenames, n)
-            else:
-                filenames = sorted(filenames)[-n:]
+
     elif isinstance(common_image_ids, list):
-        for cid in common_image_ids:
-            cid_files = [f for f in os.listdir(path) if cid in f]
-            if n is not None:
-                if randomize:
-                    cid_files = random.sample(cid_files, n)
-                else:
-                    cid_files = sorted(cid_files)[-n:]
-            filenames.extend(cid_files)
+        # filenames must contain all ids
+        filenames = [f for f in os.listdir(path) if sum([1 for x in common_image_ids if x in f]) == len(common_image_ids)]
     else:
         raise ValueError('Unknown common image ids: {}'.format(common_image_ids))
+
+    if n is not None:
+        if randomize:
+            filenames = random.sample(filenames, n)
+        else:
+            filenames = sorted(filenames)[-n:]
 
     image_ids = {
         'filenames': filenames,
@@ -328,7 +323,7 @@ def get_image_encodings_from_path(path, common_image_ids, transform, n=None, ran
 
     encodings = []
     # get encodings
-    print('processing images from {}'.format(path))
+    # print('processing images from {}'.format(path))
     for file in tqdm(filenames):
         img = read_image(path + file)
         img_encoded = transform(img)
@@ -500,7 +495,8 @@ def plot_cell_line_clustering_with_random_cluster_composition(cell_line, min_clu
 
 def get_f_classification(model, setting, device):
 
-    path_to_model = 'D:\ETH\projects\morpho-learner\\res\\linear_evaluation\\{}\\{}\\'.format(model, setting)
+    # path_to_model = 'D:\ETH\projects\morpho-learner\\res\\linear_evaluation\\{}\\{}\\'.format(model, setting)
+    path_to_model = '/Users/andreidm/ETH/projects/morpho-learner/res/classifiers/{}/{}/'.format(model, setting)
     model = Classifier().to(device)
     # load a trained classifier to use it in the transform
     model.load_state_dict(torch.load(path_to_model + 'best.torch', map_location=device))
@@ -514,20 +510,21 @@ def get_f_classification(model, setting, device):
 def get_f_transform(model, setting, device):
     """ Get the function to retrieve learned representations from the image. """
 
+    # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\training\\{}\\{}\\'.format(model, setting)
+    path_to_model = '/Users/andreidm/ETH/projects/morpho-learner/res/models/{}/{}/'.format(model, setting)
+
     if model == 'unsupervised':
-        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\training\\ae\\{}\\'.format(setting)
         model = Autoencoder().to(device)
         # load a trained autoencoder to use it in the transform
-        model.load_state_dict(torch.load(path_to_ae_model + 'best.torch', map_location=device))
+        model.load_state_dict(torch.load(path_to_model + 'best.torch', map_location=device))
         model.eval()
         # create a transform function with autoencoder
         transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
     elif model == 'self-supervised':
-        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\training\\byol\\{}\\'.format(setting)
         model = DeepClassifier().to(device)
         # load a trained deep classifier to use it in the transform
-        model.load_state_dict(torch.load(path_to_cl_model + 'best.torch', map_location=device))
+        model.load_state_dict(torch.load(path_to_model + 'best.torch', map_location=device))
         model.eval()
         # truncate to the layer with learned representations
         model = Sequential(*list(model.model.children())[:-4])
@@ -535,10 +532,9 @@ def get_f_transform(model, setting, device):
         transform = lambda x: model(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
     elif model == 'weakly-supervised':
-        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\training\\cl\\{}\\'.format(setting)
         model = DeepClassifier().to(device)
         # load a trained deep classifier to use it in the transform
-        model.load_state_dict(torch.load(path_to_cl_model + 'best.torch', map_location=device))
+        model.load_state_dict(torch.load(path_to_model + 'best.torch', map_location=device))
         model.eval()
         # truncate to the layer with learned representations
         model = Sequential(*list(model.model.children())[:-4])
@@ -546,10 +542,9 @@ def get_f_transform(model, setting, device):
         transform = lambda x: model(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)
 
     elif model == 'regularized':
-        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\training\\aecl\\{}\\'.format(setting)
         model = Autoencoder().to(device)
         # load a trained autoencoder to use it in the transform
-        model.load_state_dict(torch.load(path_to_ae_model + 'best.torch', map_location=device))
+        model.load_state_dict(torch.load(path_to_model + 'best.torch', map_location=device))
         model.eval()
         # create a transform function with autoencoder
         transform = lambda x: model.encoder(torch.Tensor(numpy.expand_dims((x / 255.), axis=0)).to(device)).reshape(-1)

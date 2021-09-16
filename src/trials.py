@@ -22,10 +22,4 @@ if __name__ == "__main__":
     #
     # for drug in drugs:
     #     shutil.move(train_drug_path + drug, test_drug_path + drug)
-
-    from matplotlib import pyplot
-
-    attend = seaborn.load_dataset("attention").query("subject <= 16")
-    g = seaborn.FacetGrid(attend, col="subject", col_wrap=4, height=2, ylim=(0, 10), margin_titles=True)
-    g.map(seaborn.barplot, "solutions", "score", color=".3", ci=None)
-    pyplot.show()
+    pass
