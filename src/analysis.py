@@ -495,14 +495,13 @@ def plot_cell_line_clustering_with_random_cluster_composition(cell_line, min_clu
 
 def get_f_classification(model, setting, device):
 
-    # path_to_model = 'D:\ETH\projects\morpho-learner\\res\\linear_evaluation\\{}\\{}\\'.format(model, setting)
-    path_to_model = '/Users/andreidm/ETH/projects/morpho-learner/res/classifiers/{}/{}/'.format(model, setting)
+    path_to_model = 'D:\ETH\projects\morpho-learner\\res\\linear_evaluation\\{}\\{}\\'.format(model, setting)
     model = Classifier().to(device)
     # load a trained classifier to use it in the transform
     model.load_state_dict(torch.load(path_to_model + 'best.torch', map_location=device))
     model.eval()
     # create a transform function with autoencoder
-    transform = lambda x: model(torch.Tensor(numpy.expand_dims(x, axis=0))).to(device).reshape(-1)
+    transform = lambda x: model(torch.from_numpy(numpy.expand_dims(x, axis=0)).to(device))
 
     return transform
 
@@ -510,8 +509,7 @@ def get_f_classification(model, setting, device):
 def get_f_transform(model, setting, device):
     """ Get the function to retrieve learned representations from the image. """
 
-    # path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\training\\{}\\{}\\'.format(model, setting)
-    path_to_model = '/Users/andreidm/ETH/projects/morpho-learner/res/models/{}/{}/'.format(model, setting)
+    path_to_model = 'D:\ETH\projects\morpho-learner\\res\\models\\{}\\{}\\'.format(model, setting)
 
     if model == 'unsupervised':
         model = Autoencoder().to(device)
