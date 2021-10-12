@@ -174,7 +174,9 @@ def plot_full_distribution_of_clusters(path, save_to):
     pyplot.close()
 
 
-def select_the_best_clustering_results(path, grouping_factors, first_metric='silhouette'):
+def print_the_best_clustering_results(path, grouping_factors, first_metric='silhouette'):
+    """ The best clustering results are selected from all parameter sets for each cell line.
+        Mean metrics are printed for each training set-up. """
 
     clustering_results = pandas.read_csv(path, keep_default_na=False)
 
@@ -183,9 +185,9 @@ def select_the_best_clustering_results(path, grouping_factors, first_metric='sil
         round(scipy.stats.pearsonr(clustering_results.loc[:, 'silhouette'], clustering_results.loc[:, 'calinski_harabasz'])[0], 3),
         round(scipy.stats.pearsonr(clustering_results.loc[:, 'silhouette'], clustering_results.loc[:, 'davies_bouldin'])[0]), 3))
 
-    best_clustering = pandas.DataFrame(columns=clustering_results.columns)
     for method in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
         for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
+            best = pandas.DataFrame(columns=clustering_results.columns)
             for factor in grouping_factors:
                 df = clustering_results.loc[(clustering_results['group_by'] == factor) & (clustering_results['method'] == method) & (clustering_results['setting'] == setting), :]
                 # select the best results by three metrics:
@@ -195,12 +197,17 @@ def select_the_best_clustering_results(path, grouping_factors, first_metric='sil
                 if df.shape[0] > 1:
                     # if there are multiple equivalent results, take more clusters
                     df = df[df['n_clusters'] == df['n_clusters'].max()]
-                best_clustering = pandas.concat([best_clustering, df])
-
-    return best_clustering
+                    if df.shape[0] > 1:
+                        df = df[df[first_metric] == df[first_metric].max()]
+                best = pandas.concat([best, df])
+            best = best.mean(axis=0)
+            print("=== {} + {} ===".format(method, setting))
+            print(best.to_string())
+            print()
 
 
 def print_statistics_on_clustering_results(clustering_results, title=""):
+    """ Statistics are calculated across all parameter sets. """
 
     print(title)
 
@@ -274,7 +281,7 @@ def compare_clustering_of_drugs():
     plot_full_distribution_of_clusters(path, save_to)
 
     # find best clustering results and analyze them
-    best_clustering = select_the_best_clustering_results(path, grouping_by)
+    print_the_best_clustering_results(path, grouping_by)
     plot_distributions_of_best_clustering_results(best_clustering, save_to)
     plot_n_clusters_for_selected_drugs(best_clustering, save_to)
 
@@ -403,7 +410,8 @@ def plot_facet_grid(data, x_variable, y_variable, hue, ci=None, plot_title="", y
 
     data['method+setting'] = data['method'] + '\n' + data['setting']
 
-    save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\'
+    # save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\'
+    save_to = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/'
 
     seaborn.set(font_scale=0.5)
     g = seaborn.FacetGrid(data, col="method+setting", hue=hue, col_wrap=4, height=1, margin_titles=True)
@@ -511,19 +519,21 @@ if __name__ == "__main__":
     # SIMILARITY OF KNOWN DRUGS VS CONTROLS
     # compare_similarity(path_to_test_drugs, path_to_test_controls)
 
-    similarity_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\similarity\\similarity.csv'
+    # similarity_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\similarity\\similarity.csv'
+    similarity_results_path = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/similarity/similarity.csv'
     # sim_data = pandas.read_csv(similarity_results_path)
+    # print_statistics_on_similarity_results(sim_data, title='STATISTICS ON SIMILARITY OF KNOWN DRUGS:')
     # cl_subset = 'M14'
     # sim_data = sim_data.loc[sim_data['group_by'] == cl_subset, :]
-    # print_statistics_on_similarity_results(sim_data, title='STATISTICS ON SIMILARITY OF KNOWN DRUGS:')
     # plot_facet_grid(sim_data, 'comparison', 'euclidean', 'comparison', ci='sd', plot_title='similarity_of_drugs_euclidean_{}'.format(cl_subset))
 
     # CLUSTERING OF CELL LINES
-    # collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, cell_lines, (10, 160, 10), uid='by_cell_lines')
+    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, cell_lines, (10, 160, 10), uid='by_cell_lines')
     # cell_lines_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_by_cell_lines.csv'
+    cell_lines_clustering_results_path = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/clustering/clustering_by_cell_lines.csv'
+    print_the_best_clustering_results(cell_lines_clustering_results_path, cell_lines)
 
     # cl_clust_data = pandas.read_csv(cell_lines_clustering_results_path)
-    # print_statistics_on_clustering_results(cl_clust_data, title='STATISTICS ON CLUSTERING OF CELL LINES:')
     # # now subset to COLO205, SW620, SKMEL2
     # cl_clust_data = cl_clust_data.loc[(cl_clust_data['group_by'] == 'COLO205') | (cl_clust_data['group_by'] == 'SW620') | (cl_clust_data['group_by'] == 'SKMEL2'), :]
     # plot_facet_grid(cl_clust_data, 'group_by', 'n_clusters', 'group_by', ci=80, plot_title="clustering_picked_cell_lines")
@@ -550,35 +560,13 @@ if __name__ == "__main__":
     # plot_facet_grid(d_clust_data, 'group_by', 'noise', 'group_by', ci=80, plot_title="noise_picked_drugs")
 
     # CLASSIFICATION OF DRUGS VS CONTROLS FOR PICKED CELL LINES
-    find_and_print_best_classification()
-
-    path_to_full_drugs = 'D:\ETH\projects\morpho-learner\\data\\full\\drugs\\'
-    path_to_full_controls = 'D:\ETH\projects\morpho-learner\\data\\full\\controls\\'
-
-    # collect_and_save_classification_results_for_cell_lines(path_to_full_drugs, path_to_full_controls, cell_lines)
-    # test_classification_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\classification\\classification_for_cell_lines.csv'
+    # find_and_print_best_classification()
+    # collect_and_save_classification_results_for_cell_lines(path_to_test_drugs, path_to_test_controls, ["HT29", "HCT15", "ACHN"])
+    # test_classification_results_path = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/classification/classification_for_cell_lines.csv'
     # class_data = pandas.read_csv(test_classification_results_path)
-    #
-    # for method in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
-    #     for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
-    #
-    #         print('=== {} + {} ==='.format(method, setting))
-    #
-    #         d = class_data.loc[(class_data['method'] == method) & (class_data['setting'] == setting), :]
-    #         print('mean acc = {}\n'
-    #               'mean f1 = {}\n'
-    #               'mean recall = {}\n'
-    #               'mean precision = {}\n'
-    #               'mean roc_auc = {}\n'.format(d['accuracy'].median(),
-    #                                          d['f1'].median(),
-    #                                          d['recall'].median(),
-    #                                          d['precision'].median(),
-    #                                          d['roc_auc'].median()))
-
-
-    # yticks = [0.2, 0.4, 0.6, 0.8]
+    # yticks = [0.6, 0.7, 0.8]
     # plot_facet_grid(class_data, 'group_by', 'roc_auc', 'group_by', ci=80, plot_title='roc_auc', yticks=yticks)
-    # plot_facet_grid(class_data, 'group_by', 'f1', 'group_by', ci=80, plot_title='f1', yticks=[0.1, 0.3, 0.5, 0.7])
+    # plot_facet_grid(class_data, 'group_by', 'f1', 'group_by', ci=80, plot_title='f1', yticks=yticks)
     # plot_facet_grid(class_data, 'group_by', 'accuracy', 'group_by', ci=80, plot_title='accuracy', yticks=yticks)
     # plot_facet_grid(class_data, 'group_by', 'precision', 'group_by', ci=80, plot_title='precision', yticks=yticks)
     # plot_facet_grid(class_data, 'group_by', 'recall', 'group_by', ci=80, plot_title='recall', yticks=yticks)

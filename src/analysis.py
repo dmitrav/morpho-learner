@@ -558,14 +558,14 @@ if __name__ == "__main__":
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
 
-    device = torch.device('cuda')
+    device = torch.device('cpu')
 
     analyze_unsupervised = False
     analyze_weakly_supervised = False
     analyze_regularized = False
     analyze_self_supervised = True
 
-    min_cluster_size = 30
+    min_cluster_size = 111
 
     if analyze_unsupervised:
         path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
@@ -600,7 +600,7 @@ if __name__ == "__main__":
 
     if analyze_self_supervised:
         path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\dcl+byol_at_17\\'
-        transform = get_f_transform('self-supervised', device)
+        transform = get_f_transform('self-supervised', 'no_aug_one_crop', device)
 
         # run the analysis for weakly supervised approach
         plot_cell_line_clustering_with_random_cluster_composition('COLO205', min_cluster_size, path_to_drugs, path_to_controls,
@@ -608,5 +608,5 @@ if __name__ == "__main__":
                                                                   transform)
 
         # plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_cl_model + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
-        plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_cl_model + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
+        # plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_cl_model + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
         # plot_full_data_umaps(path_to_drugs, path_to_cl_model + 'full_data_umaps\\', transform)
