@@ -1,8 +1,5 @@
-import torch, numpy, pandas
-from torch import nn, optim
-from torch.utils.data import DataLoader, TensorDataset
-from sklearn.preprocessing import StandardScaler, RobustScaler
-from src.constants import cell_lines, drugs
+
+from torch import nn
 
 
 class Autoencoder(nn.Module):

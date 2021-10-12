@@ -520,7 +520,7 @@ if __name__ == "__main__":
 
     # CLUSTERING OF CELL LINES
     # collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, cell_lines, (10, 160, 10), uid='by_cell_lines')
-    cell_lines_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_by_cell_lines.csv'
+    # cell_lines_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_by_cell_lines.csv'
 
     # cl_clust_data = pandas.read_csv(cell_lines_clustering_results_path)
     # print_statistics_on_clustering_results(cl_clust_data, title='STATISTICS ON CLUSTERING OF CELL LINES:')
@@ -550,14 +550,36 @@ if __name__ == "__main__":
     # plot_facet_grid(d_clust_data, 'group_by', 'noise', 'group_by', ci=80, plot_title="noise_picked_drugs")
 
     # CLASSIFICATION OF DRUGS VS CONTROLS FOR PICKED CELL LINES
-    # find_and_print_best_classification()
-    # collect_and_save_classification_results_for_cell_lines(path_to_test_drugs, path_to_test_controls, ["HT29", "HCT15", "ACHN"])
-    test_classification_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\classification\\classification_for_cell_lines.csv'
-    class_data = pandas.read_csv(test_classification_results_path)
-    yticks = [0.2, 0.4, 0.6, 0.8]
-    plot_facet_grid(class_data, 'group_by', 'roc_auc', 'group_by', ci=80, plot_title='roc_auc', yticks=yticks)
-    plot_facet_grid(class_data, 'group_by', 'f1', 'group_by', ci=80, plot_title='f1', yticks=[0.1, 0.3, 0.5, 0.7])
-    plot_facet_grid(class_data, 'group_by', 'accuracy', 'group_by', ci=80, plot_title='accuracy', yticks=yticks)
-    plot_facet_grid(class_data, 'group_by', 'precision', 'group_by', ci=80, plot_title='precision', yticks=yticks)
-    plot_facet_grid(class_data, 'group_by', 'recall', 'group_by', ci=80, plot_title='recall', yticks=yticks)
+    find_and_print_best_classification()
+
+    path_to_full_drugs = 'D:\ETH\projects\morpho-learner\\data\\full\\drugs\\'
+    path_to_full_controls = 'D:\ETH\projects\morpho-learner\\data\\full\\controls\\'
+
+    # collect_and_save_classification_results_for_cell_lines(path_to_full_drugs, path_to_full_controls, cell_lines)
+    # test_classification_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\classification\\classification_for_cell_lines.csv'
+    # class_data = pandas.read_csv(test_classification_results_path)
+    #
+    # for method in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
+    #     for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
+    #
+    #         print('=== {} + {} ==='.format(method, setting))
+    #
+    #         d = class_data.loc[(class_data['method'] == method) & (class_data['setting'] == setting), :]
+    #         print('mean acc = {}\n'
+    #               'mean f1 = {}\n'
+    #               'mean recall = {}\n'
+    #               'mean precision = {}\n'
+    #               'mean roc_auc = {}\n'.format(d['accuracy'].median(),
+    #                                          d['f1'].median(),
+    #                                          d['recall'].median(),
+    #                                          d['precision'].median(),
+    #                                          d['roc_auc'].median()))
+
+
+    # yticks = [0.2, 0.4, 0.6, 0.8]
+    # plot_facet_grid(class_data, 'group_by', 'roc_auc', 'group_by', ci=80, plot_title='roc_auc', yticks=yticks)
+    # plot_facet_grid(class_data, 'group_by', 'f1', 'group_by', ci=80, plot_title='f1', yticks=[0.1, 0.3, 0.5, 0.7])
+    # plot_facet_grid(class_data, 'group_by', 'accuracy', 'group_by', ci=80, plot_title='accuracy', yticks=yticks)
+    # plot_facet_grid(class_data, 'group_by', 'precision', 'group_by', ci=80, plot_title='precision', yticks=yticks)
+    # plot_facet_grid(class_data, 'group_by', 'recall', 'group_by', ci=80, plot_title='recall', yticks=yticks)
 
