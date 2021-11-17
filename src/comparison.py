@@ -509,6 +509,58 @@ def collect_and_save_classification_results_for_cell_lines(path_to_drugs, path_t
     results.to_csv(save_to + 'classification_for_cell_lines.csv', index=False)
 
 
+def collect_and_save_linear_evaluation_results():
+
+    # collect and save results
+    results = {
+        'method': [], 'setting': [], 'lr': [], 'm': [], 'wd': [],
+        'epoch': [], 'accuracy': [], 'recall': [], 'precision': [], 'specificity': [], 'f1': []
+    }
+
+    path_to_results = 'D:\ETH\projects\morpho-learner\\res\linear_evaluation\\'
+
+    for method in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
+        for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
+
+            path = path_to_results + '{}\\{}\\'.format(method, setting)
+            for param_set in os.listdir(path):
+                if not param_set.endswith('.torch'):
+                    data = pandas.read_csv(path + '{}\\history.csv'.format(param_set))
+                    best_f1_data = data.loc[data['f1'] == data['f1'].max(), :]
+
+                    results['method'].append(method)
+                    results['setting'].append(setting)
+
+                    results['lr'].append(float(param_set.split(',')[0].split('=')[1]))
+                    results['m'].append(float(param_set.split(',')[1].split('=')[1]))
+                    results['wd'].append(float(param_set.split(',')[2].split('=')[1]))
+
+                    results['epoch'].append(int(best_f1_data['epoch']))
+                    results['accuracy'].append(float(best_f1_data['accuracy']))
+                    results['recall'].append(float(best_f1_data['recall']))
+                    results['precision'].append(float(best_f1_data['precision']))
+                    results['specificity'].append(float(best_f1_data['specificity']))
+                    results['f1'].append(float(best_f1_data['f1']))
+
+    results_df = pandas.DataFrame(results)
+    results_df.to_csv(path_to_results + 'classification.csv', index=False)
+
+
+def print_statistics_on_linear_evaluation(results):
+
+    for method in ['unsupervised', 'self-supervised', 'weakly-supervised', 'regularized']:
+        for setting in ['aug_multi_crop', 'aug_one_crop', 'no_aug_multi_crop', 'no_aug_one_crop']:
+
+            temp = results.loc[(results['method'] == method) & (results['setting'] == setting), :]
+
+            print("=== {} + {} ===\n".format(method, setting))
+            print('accuracy = {} +- {}'.format(round(temp['accuracy'].median(), 2), round(temp['accuracy'].mad(), 2)))
+            print('precision = {} +- {}'.format(round(temp['precision'].median(), 2), round(temp['precision'].mad(), 2)))
+            print('recall = {} +- {}'.format(round(temp['recall'].median(), 2), round(temp['recall'].mad(), 2)))
+            print('roc_auc = {} +- {}'.format(round(temp['roc_auc'].median(),2), round(temp['roc_auc'].mad(), 2)))
+            print()
+
+
 def find_and_print_best_classification():
 
     path = Path('D:\ETH\projects\morpho-learner\\res\linear_evaluation\\')
@@ -550,8 +602,8 @@ if __name__ == "__main__":
     # CLUSTERING OF CELL LINES
     # collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, cell_lines, (10, 160, 10), uid='by_cell_lines')
     # cell_lines_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_by_cell_lines.csv'
-    cell_lines_clustering_results_path = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/clustering/clustering_by_cell_lines.csv'
-    print_the_best_clustering_results(cell_lines_clustering_results_path, cell_lines)
+    # cell_lines_clustering_results_path = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/clustering/clustering_by_cell_lines.csv'
+    # print_the_best_clustering_results(cell_lines_clustering_results_path, cell_lines)
 
     # cl_clust_data = pandas.read_csv(cell_lines_clustering_results_path)
     # # now subset to COLO205, SW620, SKMEL2
@@ -580,6 +632,10 @@ if __name__ == "__main__":
     # plot_facet_grid(d_clust_data, 'group_by', 'noise', 'group_by', ci=80, plot_title="noise_picked_drugs")
 
     # CLASSIFICATION OF DRUGS VS CONTROLS FOR PICKED CELL LINES
+
+    # collect_and_save_linear_evaluation_results()
+    results = pandas.read_csv('D:\ETH\projects\morpho-learner\\res\comparison\classification\\classification_for_cell_lines.csv')
+    print_statistics_on_linear_evaluation(results)
     # find_and_print_best_classification()
     # collect_and_save_classification_results_for_cell_lines(path_to_test_drugs, path_to_test_controls, ["HT29", "HCT15", "ACHN"])
     # test_classification_results_path = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/classification/classification_for_cell_lines.csv'
