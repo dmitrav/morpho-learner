@@ -200,9 +200,19 @@ def print_the_best_clustering_results(path, grouping_factors, first_metric='silh
                     if df.shape[0] > 1:
                         df = df[df[first_metric] == df[first_metric].max()]
                 best = pandas.concat([best, df])
-            best = best.mean(axis=0)
+
+            filter = (best['min_cluster_size'] > len(cell_lines))
+            best = best.loc[filter]
+
+            best['not_noise'] = 100 - best['noise']
+            best['davies-1'] = 1 / best['davies_bouldin']
+
+            best_mean = best.iloc[:,3:].astype('float').mean(axis=0)
+            best_std = best.iloc[:,3:].astype('float').std(axis=0)
             print("=== {} + {} ===".format(method, setting))
-            print(best.to_string())
+            print(best_mean.to_string())
+            print()
+            print(best_std.to_string())
             print()
 
 
@@ -390,20 +400,30 @@ def print_statistics_on_similarity_results(results, title=""):
 
             print("=== {} + {} ===\n".format(method, setting))
 
-            print("MTX-PTX:\nmedian euclidean = {}\nmedian cosine = {}\nmedian correlation = {}\nmedian braycurtis = {}\n".format(
-                    round(mtx_ptx["euclidean"].median(), 3), round(mtx_ptx["cosine"].median(), 3),
-                    round(mtx_ptx["correlation"].median(), 3), round(mtx_ptx["braycurtis"].median(), 3)
-                ))
+            D = mtx_ptx["euclidean"].median()
+            rev_D = 1 / D
+            mad_rev_D = numpy.median(numpy.abs(1 / mtx_ptx["euclidean"] - rev_D))
+            print('D^-1 = {} +- {}'.format(rev_D, mad_rev_D))
 
-            print("MTX-DMSO:\nmedian euclidean = {}\nmedian cosine = {}\nmedian correlation = {}\nmedian braycurtis = {}\n".format(
-                    round(mtx_dmso["euclidean"].median(), 3), round(mtx_dmso["cosine"].median(), 3),
-                    round(mtx_dmso["correlation"].median(), 3), round(mtx_dmso["braycurtis"].median(), 3)
-                ))
+            D_hat = (mtx_dmso['euclidean'].median() + ptx_dmso['euclidean'].median()) / 2
+            d = (D_hat - D) / D_hat
+            mad_d = numpy.median(numpy.abs(d - numpy.median(d)))
+            print('d = {} +- {}'.format(d, mad_d))
 
-            print("PTX-DMSO:\nmedian euclidean = {}\nmedian cosine = {}\nmedian correlation = {}\nmedian braycurtis = {}\n".format(
-                    round(ptx_dmso["euclidean"].median(), 3), round(ptx_dmso["cosine"].median(), 3),
-                    round(ptx_dmso["correlation"].median(), 3), round(ptx_dmso["braycurtis"].median(), 3)
-                ))
+            # print("MTX-PTX:\nmedian euclidean = {}\nmedian cosine = {}\nmedian correlation = {}\nmedian braycurtis = {}\n".format(
+            #         round(mtx_ptx["euclidean"].median(), 3), round(mtx_ptx["cosine"].median(), 3),
+            #         round(mtx_ptx["correlation"].median(), 3), round(mtx_ptx["braycurtis"].median(), 3)
+            #     ))
+            #
+            # print("MTX-DMSO:\nmedian euclidean = {}\nmedian cosine = {}\nmedian correlation = {}\nmedian braycurtis = {}\n".format(
+            #         round(mtx_dmso["euclidean"].median(), 3), round(mtx_dmso["cosine"].median(), 3),
+            #         round(mtx_dmso["correlation"].median(), 3), round(mtx_dmso["braycurtis"].median(), 3)
+            #     ))
+            #
+            # print("PTX-DMSO:\nmedian euclidean = {}\nmedian cosine = {}\nmedian correlation = {}\nmedian braycurtis = {}\n".format(
+            #         round(ptx_dmso["euclidean"].median(), 3), round(ptx_dmso["cosine"].median(), 3),
+            #         round(ptx_dmso["correlation"].median(), 3), round(ptx_dmso["braycurtis"].median(), 3)
+            #     ))
 
 
 def plot_facet_grid(data, x_variable, y_variable, hue, ci=None, plot_title="", yticks=None):
@@ -516,7 +536,7 @@ if __name__ == "__main__":
     path_to_test_drugs = 'D:\ETH\projects\morpho-learner\\data\\test\\drugs\\'
     path_to_test_controls = 'D:\ETH\projects\morpho-learner\\data\\test\\controls\\'
 
-    # SIMILARITY OF KNOWN DRUGS VS CONTROLS
+    # # SIMILARITY OF KNOWN DRUGS VS CONTROLS
     # compare_similarity(path_to_test_drugs, path_to_test_controls)
 
     # similarity_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\similarity\\similarity.csv'
@@ -528,7 +548,7 @@ if __name__ == "__main__":
     # plot_facet_grid(sim_data, 'comparison', 'euclidean', 'comparison', ci='sd', plot_title='similarity_of_drugs_euclidean_{}'.format(cl_subset))
 
     # CLUSTERING OF CELL LINES
-    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, cell_lines, (10, 160, 10), uid='by_cell_lines')
+    # collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, cell_lines, (10, 160, 10), uid='by_cell_lines')
     # cell_lines_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_by_cell_lines.csv'
     cell_lines_clustering_results_path = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/clustering/clustering_by_cell_lines.csv'
     print_the_best_clustering_results(cell_lines_clustering_results_path, cell_lines)
