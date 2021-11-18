@@ -14,12 +14,6 @@ from src.datasets import CustomImageDataset, JointImageDataset, MultiLabelDatase
 from src import constants, trainer
 
 
-# TODO:
-#  - conv layer in the end?
-#  - av / min pooling?
-#  - deeper?
-
-
 class Backbone(nn.Module):
     # best for reconstruction & binary classification
 
@@ -381,7 +375,6 @@ if __name__ == '__main__':
     path_to_drugs = 'D:\ETH\projects\morpho-learner\data\cut\\'
     path_to_controls = 'D:\ETH\projects\morpho-learner\data\cut_controls\\'
 
-    # define augmentations like in BYOL or SimCLR (almost)
     transform = torch.nn.Sequential(
         T.RandomHorizontalFlip(),
         RandomApply(T.GaussianBlur((3, 3), (.1, 2.0)), p=0.2),
@@ -395,7 +388,7 @@ if __name__ == '__main__':
     data = MultiLabelDataset({0: path_to_controls, 1: path_to_drugs}, shuffle=True)
     training_data, validation_data = torch.utils.data.random_split(data, [700000, 99577])
 
-    device = torch.device('cuda')
+    device = torch.device('cpu')
     epochs = 10
 
     models = [

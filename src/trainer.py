@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torchvision import transforms as T
 
 from src.models import Autoencoder, Classifier, DeepClassifier
-from src.byol import run_training_for_64x64_cuts
+from src import byol
 from src.datasets import CustomImageDataset, JointImageDataset, MultiLabelDataset, MultiCropDataset
 from src import constants
 
@@ -489,7 +489,7 @@ def train_all_models(epochs, batch_size, train_dataset, test_dataset, dataset_id
     train_autoencoder(epochs, data_loader_train, data_loader_val, device=device, run_id=dataset_id)
     train_deep_classifier_weakly(epochs, data_loader_train, data_loader_val, device=device, run_id=dataset_id)
     train_together(epochs, data_loader_train, data_loader_val, device=device, run_id=dataset_id)
-    run_training_for_64x64_cuts(epochs, data_loader_train, device=device, run_id=dataset_id)
+    byol.run_training_for_64x64_cuts(epochs, data_loader_train, device=device, run_id=dataset_id)
 
 
 if __name__ == "__main__":
