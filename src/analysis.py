@@ -563,50 +563,53 @@ if __name__ == "__main__":
     analyze_unsupervised = False
     analyze_weakly_supervised = False
     analyze_regularized = False
-    analyze_self_supervised = True
+    analyze_self_supervised = False
 
+    # experiment with size for better visualization
     min_cluster_size = 111
 
     if analyze_unsupervised:
-        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\ae_at_100_0.667\\'
-        transform = get_f_transform('unsupervised', device)
+        save_path = 'D:\ETH\projects\morpho-learner\\res\\unsupervised\\'
+        # according to comparison, aug_one_crop delivered the best results
+        transform = get_f_transform('unsupervised', 'aug_one_crop', device)
 
         # run the analysis for unsupervised approach
-        plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_ae_model + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
-        plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_ae_model + 'new_drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
-        # plot_full_data_umaps(path_to_drugs, path_to_ae_model + 'full_data_umaps\\', transform)
+        plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, save_path + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
+        plot_drugs_clustering(min_cluster_size, path_to_drugs, save_path + 'new_drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
+        plot_full_data_umaps(path_to_drugs, save_path + 'full_data_umaps\\', transform)
 
     if analyze_regularized:
-        path_to_ae_model = 'D:\ETH\projects\morpho-learner\\res\\aecl_at_100_0.667_0.7743\\'
-        transform = get_f_transform('adversarial', device)
+        save_path = 'D:\ETH\projects\morpho-learner\\res\\regularized\\'
+        # according to comparison, no_aug_multi_crop delivered the best results
+        transform = get_f_transform('regularized', 'no_aug_multi_crop', device)
 
-        # run the analysis for adversarial approach
+        # run the analysis for regularized approach
         plot_cell_line_clustering_with_random_cluster_composition('SW620', min_cluster_size, path_to_drugs, path_to_controls,
-                                                                  path_to_ae_model + 'umaps_with_pies\\'.format(min_cluster_size),
+                                                                  save_path + 'umaps_with_pies\\'.format(min_cluster_size),
                                                                   transform)
 
-        # plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_ae_model + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
-        # plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_ae_model + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
-        # plot_full_data_umaps(path_to_drugs, path_to_ae_model + 'full_data_umaps\\', transform)
+        plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, save_path + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
+        plot_drugs_clustering(min_cluster_size, path_to_drugs, save_path + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
+        plot_full_data_umaps(path_to_drugs, save_path + 'full_data_umaps\\', transform)
 
     if analyze_weakly_supervised:
-        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\\dcl_at_100_0.7424\\'
-        transform = get_f_transform('weakly-supervised', device)
+        save_path = 'D:\ETH\projects\morpho-learner\\res\\weakly-supervised\\'
+        transform = get_f_transform('weakly-supervised', 'no_aug_multi_crop', device)
 
         # run the analysis for weakly supervised approach
-        plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_cl_model + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
-        plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_cl_model + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
-        # plot_full_data_umaps(path_to_drugs, path_to_cl_model + 'full_data_umaps\\', transform)
+        plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, save_path + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
+        plot_drugs_clustering(min_cluster_size, path_to_drugs, save_path + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
+        plot_full_data_umaps(path_to_drugs, save_path + 'full_data_umaps\\', transform)
 
     if analyze_self_supervised:
-        path_to_cl_model = 'D:\ETH\projects\morpho-learner\\res\dcl+byol_at_17\\'
+        save_path = 'D:\ETH\projects\morpho-learner\\res\\self-supervised\\'
         transform = get_f_transform('self-supervised', 'no_aug_one_crop', device)
 
         # run the analysis for weakly supervised approach
         plot_cell_line_clustering_with_random_cluster_composition('COLO205', min_cluster_size, path_to_drugs, path_to_controls,
-                                                                  path_to_cl_model + 'umaps_with_pies\\'.format(min_cluster_size),
+                                                                  save_path + 'umaps_with_pies\\'.format(min_cluster_size),
                                                                   transform)
 
-        # plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, path_to_cl_model + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
-        # plot_drugs_clustering(min_cluster_size, path_to_drugs, path_to_cl_model + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
-        # plot_full_data_umaps(path_to_drugs, path_to_cl_model + 'full_data_umaps\\', transform)
+        plot_cell_lines_clustering(min_cluster_size, path_to_drugs, path_to_controls, save_path + 'cell_lines_clustering_mcs={}\\'.format(min_cluster_size), transform)
+        plot_drugs_clustering(min_cluster_size, path_to_drugs, save_path + 'drugs_clustering_mcs={}\\'.format(min_cluster_size), transform)
+        plot_full_data_umaps(path_to_drugs, save_path + 'full_data_umaps\\', transform)

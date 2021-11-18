@@ -588,8 +588,8 @@ if __name__ == "__main__":
     path_to_test_drugs = 'D:\ETH\projects\morpho-learner\\data\\test\\drugs\\'
     path_to_test_controls = 'D:\ETH\projects\morpho-learner\\data\\test\\controls\\'
 
-    # # SIMILARITY OF KNOWN DRUGS VS CONTROLS
-    # compare_similarity(path_to_test_drugs, path_to_test_controls)
+    # SIMILARITY OF KNOWN DRUGS VS CONTROLS
+    compare_similarity(path_to_test_drugs, path_to_test_controls)
 
     # similarity_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\similarity\\similarity.csv'
     similarity_results_path = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/similarity/similarity.csv'

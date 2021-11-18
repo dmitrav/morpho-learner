@@ -254,7 +254,7 @@ class BYOL(torch.nn.Module):
 def get_byol_pars(im_size, transform=None, randomize=True):
 
     if randomize:
-        return dict(image_size=im_size,  # 256
+        return dict(image_size=im_size,
                     hidden_layer='model.9',
                     projection_size=random.sample([64, 128, 256, 512, 1024, 2048], 1)[0],  # 256
                     projection_hidden_size=random.sample([512, 1024, 2048, 4096, 8192], 1)[0],  # 4096
