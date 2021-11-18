@@ -59,7 +59,6 @@ def plot_number_of_clusters(key, mcs, save_to, filter_threshold=4):
                 results = results.drop(results[results['name'] == name].index)
 
     plot_title = "Clustering of {}".format(key.replace('_', ' '))
-    # pyplot.figure(figsize=(12,6))
     # pyplot.figure(figsize=(10,6))
     seaborn.set_theme(style="whitegrid")
     seaborn.barplot(x='name', y='Number of clusters', hue='method', data=results)
@@ -103,8 +102,7 @@ def calculate_clustering_consistency(clusters, image_ids):
 def collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_images, grouping_factors, range_with_step, uid=''):
     """ Cluster the dataset over multiple parameters, evaluate results and save results as a dataframe. """
 
-    # save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\'
-    save_to = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/clustering/'
+    save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\'
     if not os.path.exists(save_to):
         os.makedirs(save_to)
 
@@ -274,28 +272,6 @@ def plot_n_clusters_for_selected_drugs(best_clustering, save_to):
     pyplot.close()
 
 
-def compare_clustering_of_drugs():
-
-    save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\'
-    run_clustering_grid = False
-
-    if run_clustering_grid:
-        # run clustering over many parameter sets and save results
-        path = 'D:\ETH\projects\morpho-learner\data\cut\\'
-        grouping_by = [drug for drug in drugs if drug not in ['DMSO', 'PBS']]
-        collect_and_save_clustering_results_for_multiple_parameter_sets(path, grouping_by, (50, 310, 50), uid='by_drugs')
-
-    # analyze full results
-    path = save_to + 'clusters_over_min_cluster_size_50_300.csv'
-    print_statistics_on_clustering_results(path)
-    plot_full_distribution_of_clusters(path, save_to)
-
-    # find best clustering results and analyze them
-    print_the_best_clustering_results(path, grouping_by)
-    plot_distributions_of_best_clustering_results(best_clustering, save_to)
-    plot_n_clusters_for_selected_drugs(best_clustering, save_to)
-
-
 def calculate_similarity_of_pair(codes_A, codes_B):
 
     d_2 = []
@@ -426,12 +402,11 @@ def print_statistics_on_similarity_results(results, title=""):
             #     ))
 
 
-def plot_facet_grid(data, x_variable, y_variable, hue, ci=None, plot_title="", yticks=None):
+def plot_facet_grid(data, x_variable, y_variable, hue, ci=None, plot_title="", yticks=None, save=False):
 
     data['method+setting'] = data['method'] + '\n' + data['setting']
 
-    # save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\'
-    save_to = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/'
+    save_to = 'D:\ETH\projects\morpho-learner\\res\\comparison\\'
 
     seaborn.set(font_scale=0.5)
     g = seaborn.FacetGrid(data, col="method+setting", hue=hue, col_wrap=4, height=1, margin_titles=True)
@@ -444,8 +419,10 @@ def plot_facet_grid(data, x_variable, y_variable, hue, ci=None, plot_title="", y
             label.set_rotation(45)
 
     pyplot.tight_layout()
-    # pyplot.show()
-    pyplot.savefig(save_to + '{}.pdf'.format(plot_title))
+    if save:
+        pyplot.savefig(save_to + '{}.pdf'.format(plot_title))
+    else:
+        pyplot.show()
 
 
 def calculate_classification_metrics(cell_line, codes_drugs, codes_controls, drugs_ids, controls_ids, classifier, device=torch.device('cuda')):
@@ -588,62 +565,62 @@ if __name__ == "__main__":
     path_to_test_drugs = 'D:\ETH\projects\morpho-learner\\data\\test\\drugs\\'
     path_to_test_controls = 'D:\ETH\projects\morpho-learner\\data\\test\\controls\\'
 
-    # SIMILARITY OF KNOWN DRUGS VS CONTROLS
+    # SIMILARITY OF KNOWN DRUGS
     compare_similarity(path_to_test_drugs, path_to_test_controls)
 
-    # similarity_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\similarity\\similarity.csv'
-    similarity_results_path = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/similarity/similarity.csv'
-    # sim_data = pandas.read_csv(similarity_results_path)
-    # print_statistics_on_similarity_results(sim_data, title='STATISTICS ON SIMILARITY OF KNOWN DRUGS:')
-    # cl_subset = 'M14'
-    # sim_data = sim_data.loc[sim_data['group_by'] == cl_subset, :]
-    # plot_facet_grid(sim_data, 'comparison', 'euclidean', 'comparison', ci='sd', plot_title='similarity_of_drugs_euclidean_{}'.format(cl_subset))
+    similarity_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\similarity\\similarity.csv'
+    sim_data = pandas.read_csv(similarity_results_path)
+    print_statistics_on_similarity_results(sim_data, title='STATISTICS ON SIMILARITY OF KNOWN DRUGS:')
+
+    cl_subset = 'M14'  # select a single cell line as an example
+    sim_data = sim_data.loc[sim_data['group_by'] == cl_subset, :]
+    plot_facet_grid(sim_data, 'comparison', 'euclidean', 'comparison', ci='sd', plot_title='similarity_of_drugs_euclidean_{}'.format(cl_subset))
 
     # CLUSTERING OF CELL LINES
-    # collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, cell_lines, (10, 160, 10), uid='by_cell_lines')
-    # cell_lines_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_by_cell_lines.csv'
-    # cell_lines_clustering_results_path = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/clustering/clustering_by_cell_lines.csv'
-    # print_the_best_clustering_results(cell_lines_clustering_results_path, cell_lines)
 
-    # cl_clust_data = pandas.read_csv(cell_lines_clustering_results_path)
-    # # now subset to COLO205, SW620, SKMEL2
-    # cl_clust_data = cl_clust_data.loc[(cl_clust_data['group_by'] == 'COLO205') | (cl_clust_data['group_by'] == 'SW620') | (cl_clust_data['group_by'] == 'SKMEL2'), :]
-    # plot_facet_grid(cl_clust_data, 'group_by', 'n_clusters', 'group_by', ci=80, plot_title="clustering_picked_cell_lines")
-    # plot_facet_grid(cl_clust_data, 'group_by', 'silhouette', 'group_by', ci=80, plot_title="silhouette_picked_cell_lines")
-    # plot_facet_grid(cl_clust_data, 'group_by', 'calinski_harabasz', 'group_by', ci=80, plot_title="calinski_picked_cell_lines")
-    # plot_facet_grid(cl_clust_data, 'group_by', 'davies_bouldin', 'group_by', ci=80, plot_title="davies_picked_cell_lines")
-    # plot_facet_grid(cl_clust_data, 'group_by', 'consistency_drugs', 'group_by', ci=80, plot_title="consistency_picked_cell_lines")
-    # plot_facet_grid(cl_clust_data, 'group_by', 'noise', 'group_by', ci=80, plot_title="noise_picked_cell_lines")
-    #
-    # # CLUSTERING OF DRUGS
-    # picked_drugs = [d for d in drugs if d not in ['PBS', 'DMSO']]
-    # collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, picked_drugs, (10, 160, 10), uid='by_drugs')
-    # drugs_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_by_drugs.csv'
-    #
-    # d_clust_data = pandas.read_csv(drugs_clustering_results_path)  # now subset to Gemcitabine, Cladribine, Irinotecan
-    # print_statistics_on_clustering_results(d_clust_data, title='STATISTICS ON CLUSTERING OF DRUGS:')
-    # # now subset to Gemcitabine, Cladribine, Irinotecan
-    # d_clust_data = d_clust_data.loc[(d_clust_data['group_by2'] == 'Gemcitabine') | (d_clust_data['group_by'] == 'Cladribine') | (d_clust_data['group_by'] == 'Irinotecan'), :]
-    # plot_facet_grid(d_clust_data, 'group_by', 'n_clusters', 'group_by', ci=80, plot_title="clustering_picked_drugs")
-    # plot_facet_grid(d_clust_data, 'group_by', 'silhouette', 'group_by', ci=80, plot_title="silhouette_picked_drugs")
-    # plot_facet_grid(d_clust_data, 'group_by', 'calinski_harabasz', 'group_by', ci=80, plot_title="calinski_picked_drugs")
-    # plot_facet_grid(d_clust_data, 'group_by', 'davies_bouldin', 'group_by', ci=80, plot_title="davies_picked_drugs")
-    # plot_facet_grid(d_clust_data, 'group_by', 'consistency_cells', 'group_by', ci=80, plot_title="consistency_picked_drugs")
-    # plot_facet_grid(d_clust_data, 'group_by', 'noise', 'group_by', ci=80, plot_title="noise_picked_drugs")
+    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, cell_lines, (10, 160, 10), uid='by_cell_lines')
+    cell_lines_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_by_cell_lines.csv'
+    print_the_best_clustering_results(cell_lines_clustering_results_path, cell_lines)
+
+    cl_clust_data = pandas.read_csv(cell_lines_clustering_results_path)
+    # now subset to COLO205, SW620, SKMEL2 and plot clustering results
+    cl_clust_data = cl_clust_data.loc[(cl_clust_data['group_by'] == 'COLO205') | (cl_clust_data['group_by'] == 'SW620') | (cl_clust_data['group_by'] == 'SKMEL2'), :]
+    plot_facet_grid(cl_clust_data, 'group_by', 'n_clusters', 'group_by', ci=80, plot_title="clustering_picked_cell_lines")
+    plot_facet_grid(cl_clust_data, 'group_by', 'silhouette', 'group_by', ci=80, plot_title="silhouette_picked_cell_lines")
+    plot_facet_grid(cl_clust_data, 'group_by', 'calinski_harabasz', 'group_by', ci=80, plot_title="calinski_picked_cell_lines")
+    plot_facet_grid(cl_clust_data, 'group_by', 'davies_bouldin', 'group_by', ci=80, plot_title="davies_picked_cell_lines")
+    plot_facet_grid(cl_clust_data, 'group_by', 'consistency_drugs', 'group_by', ci=80, plot_title="consistency_picked_cell_lines")
+    plot_facet_grid(cl_clust_data, 'group_by', 'noise', 'group_by', ci=80, plot_title="noise_picked_cell_lines")
+
+    # CLUSTERING OF DRUGS
+
+    picked_drugs = [d for d in drugs if d not in ['PBS', 'DMSO']]
+    collect_and_save_clustering_results_for_multiple_parameter_sets(path_to_test_drugs, picked_drugs, (10, 160, 10), uid='by_drugs')
+    drugs_clustering_results_path = 'D:\ETH\projects\morpho-learner\\res\\comparison\\clustering\\clustering_by_drugs.csv'
+
+    d_clust_data = pandas.read_csv(drugs_clustering_results_path)  # now subset to Gemcitabine, Cladribine, Irinotecan
+    print_statistics_on_clustering_results(d_clust_data, title='STATISTICS ON CLUSTERING OF DRUGS:')
+    # now subset to Gemcitabine, Cladribine, Irinotecan and plot clustering results
+    d_clust_data = d_clust_data.loc[(d_clust_data['group_by2'] == 'Gemcitabine') | (d_clust_data['group_by'] == 'Cladribine') | (d_clust_data['group_by'] == 'Irinotecan'), :]
+    plot_facet_grid(d_clust_data, 'group_by', 'n_clusters', 'group_by', ci=80, plot_title="clustering_picked_drugs")
+    plot_facet_grid(d_clust_data, 'group_by', 'silhouette', 'group_by', ci=80, plot_title="silhouette_picked_drugs")
+    plot_facet_grid(d_clust_data, 'group_by', 'calinski_harabasz', 'group_by', ci=80, plot_title="calinski_picked_drugs")
+    plot_facet_grid(d_clust_data, 'group_by', 'davies_bouldin', 'group_by', ci=80, plot_title="davies_picked_drugs")
+    plot_facet_grid(d_clust_data, 'group_by', 'consistency_cells', 'group_by', ci=80, plot_title="consistency_picked_drugs")
+    plot_facet_grid(d_clust_data, 'group_by', 'noise', 'group_by', ci=80, plot_title="noise_picked_drugs")
 
     # CLASSIFICATION OF DRUGS VS CONTROLS FOR PICKED CELL LINES
 
-    # collect_and_save_linear_evaluation_results()
+    collect_and_save_classification_results_for_cell_lines(path_to_test_drugs, path_to_test_controls, cell_lines)
     results = pandas.read_csv('D:\ETH\projects\morpho-learner\\res\comparison\classification\\classification_for_cell_lines.csv')
     print_statistics_on_linear_evaluation(results)
-    # find_and_print_best_classification()
-    # collect_and_save_classification_results_for_cell_lines(path_to_test_drugs, path_to_test_controls, ["HT29", "HCT15", "ACHN"])
-    # test_classification_results_path = '/Users/andreidm/ETH/projects/morpho-learner/res/comparison/classification/classification_for_cell_lines.csv'
-    # class_data = pandas.read_csv(test_classification_results_path)
-    # yticks = [0.6, 0.7, 0.8]
-    # plot_facet_grid(class_data, 'group_by', 'roc_auc', 'group_by', ci=80, plot_title='roc_auc', yticks=yticks)
-    # plot_facet_grid(class_data, 'group_by', 'f1', 'group_by', ci=80, plot_title='f1', yticks=yticks)
-    # plot_facet_grid(class_data, 'group_by', 'accuracy', 'group_by', ci=80, plot_title='accuracy', yticks=yticks)
-    # plot_facet_grid(class_data, 'group_by', 'precision', 'group_by', ci=80, plot_title='precision', yticks=yticks)
-    # plot_facet_grid(class_data, 'group_by', 'recall', 'group_by', ci=80, plot_title='recall', yticks=yticks)
+
+    test_classification_results_path = 'D:\ETH\projects\morpho-learner\\res\comparison\classification\\classification_for_cell_lines.csv'
+    class_data = pandas.read_csv(test_classification_results_path)
+    yticks = [0.6, 0.7, 0.8]  # accuracy baselines
+    plot_facet_grid(class_data, 'group_by', 'roc_auc', 'group_by', ci=80, plot_title='roc_auc', yticks=yticks)
+    plot_facet_grid(class_data, 'group_by', 'f1', 'group_by', ci=80, plot_title='f1', yticks=yticks)
+    plot_facet_grid(class_data, 'group_by', 'accuracy', 'group_by', ci=80, plot_title='accuracy', yticks=yticks)
+    plot_facet_grid(class_data, 'group_by', 'precision', 'group_by', ci=80, plot_title='precision', yticks=yticks)
+    plot_facet_grid(class_data, 'group_by', 'recall', 'group_by', ci=80, plot_title='recall', yticks=yticks)
 
