@@ -13,10 +13,22 @@ from vit_pytorch.recorder import Recorder
 
 from src.models import Autoencoder, Classifier, DeepClassifier
 from src.trainer import CustomImageDataset, JointImageDataset
-from src.constants import vit_par_types
 from src.trainer import plot_reconstruction, train_together, train_autoencoder
 from src.trainer import train_deep_classifier_weakly
 from src.analysis import plot_drugs_clustering, plot_cell_lines_clustering
+
+# for vision transformer
+vit_par_types = {
+    'image_size': int,
+    'patch_size': int,
+    'num_classes': int,
+    'dim': int,
+    'depth': int,
+    'heads': int,
+    'mlp_dim': int,
+    'dropout': float,
+    'emb_dropout': float
+}
 
 
 def get_vit_pars(im_size, randomize=True):
