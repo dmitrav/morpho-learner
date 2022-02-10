@@ -624,3 +624,19 @@ if __name__ == "__main__":
     plot_facet_grid(class_data, 'group_by', 'precision', 'group_by', ci=80, plot_title='precision', yticks=yticks)
     plot_facet_grid(class_data, 'group_by', 'recall', 'group_by', ci=80, plot_title='recall', yticks=yticks)
 
+    # MOTIVATION FOR EUCLIDEAN DISTANCE
+
+    data = pandas.read_csv('/Users/andreidm/ETH/projects/morpho-learner/res/comparison/similarity/similarity.csv')
+    data = data.loc[data['group_by'] == 'ACHN']
+
+    seaborn.set()
+
+    fig, axs = pyplot.subplots(2, 2)
+    seaborn.kdeplot(data=data, x="euclidean", hue="comparison", fill=True, ax=axs[1, 1], legend=False)
+    seaborn.kdeplot(data=data, x="cosine", hue="comparison", fill=True, ax=axs[0, 0], legend=False)
+    seaborn.kdeplot(data=data, x="braycurtis", hue="comparison", fill=True, ax=axs[0, 1])
+    seaborn.kdeplot(data=data, x="correlation", hue="comparison", fill=True, ax=axs[1, 0], legend=False)
+    pyplot.suptitle('Distances for ACHN cell line')
+    pyplot.tight_layout()
+
+    pyplot.savefig('/Users/andreidm/ETH/projects/morpho-learner/res/comparison/similarity/ACHN_example.pdf')
